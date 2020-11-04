@@ -434,6 +434,12 @@ h6,
     font-weight: 500;
 }
 
+.leadhead {
+    font-size: 1.5rem;
+    font-weight: 750;
+    color: white;
+}
+
 .display-1 {
     font-size: 5rem;
     font-weight: 300;
@@ -4547,6 +4553,20 @@ input[type="button"].btn-block {
 .navbar-dark .navbar-text a:hover,
 .navbar-dark .navbar-text a:focus {
     color: #ffffff;
+}
+
+.cardBTC {
+    position: relative;
+    display: -ms-flexbox;
+    display: flex;
+    -ms-flex-direction: column;
+    flex-direction: column;
+    min-width: 0;
+    word-wrap: break-word;
+    background-color: gold;
+    background-clip: border-box;
+    border: 0px solid rgba(0, 0, 0, 0.125);
+    border-radius: 0.3rem;
 }
 
 .card {
