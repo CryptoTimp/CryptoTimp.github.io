@@ -1,0 +1,27 @@
+{
+  "name": "cryptotimp.github.io",
+  "version": "1.0.0",
+  "description": "",
+  "main": "test.js",
+  "dependencies": {
+    "browserify-shim": "^3.8.14",
+    "jquery": "^3.5.1",
+    "lodash": "^4.17.20",
+    "websocket": "^1.0.32",
+    "ws": "^7.4.0"
+  },
+  "devDependencies": {},
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/CryptoTimp/CryptoTimp.github.io.git"
+  },
+  "author": "",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/CryptoTimp/CryptoTimp.github.io/issues"
+  },
+  "homepage": "https://github.com/CryptoTimp/CryptoTimp.github.io#readme"
+}
