@@ -242,7 +242,7 @@ async function updateTable(orderbook) {
 
     let html = `<table>`
     html +=
-        `<tr><th colspan="1">DOM</th><th colspan="1">Orders</th><th colspan="1">Bids</th><th colspan="1">Price</th><th colspan="1">Asks</th><th colspan="1">T: ${numberTrades}</th></tr>`
+        `<tr><th colspan="1">DOM</th><th colspan="1">Bids</th><th colspan="1">Price</th><th colspan="1">Asks</th><th colspan="1">T: ${numberTrades}</th></tr>`
     for (var i = centrePrice + 100; i > centrePrice - 100; i -= consolidation) {
         if (consolidate(lastPrice.price) == i) {
             var directionColour = lastPrice.direction ? "#D23830" : "#0F969E"
@@ -255,12 +255,6 @@ async function updateTable(orderbook) {
                         </div>
                         </td>`
 
-                if (Object.keys(limits).includes(String(i))) {
-                    html +=
-                        `<td onclick="BinanceCancelOrder(${i})" style="background-color:blue; color:white;">${limits[i].size}</td>`
-                } else {
-                    html += `<td onclick="BinanceCancelOrder(${i})" style="background-color:white;"></td>`
-                }
 
                 if (bidMap.get(String(i)).toFixed(3) > sizeThreshold) {
                     html +=
@@ -289,12 +283,6 @@ async function updateTable(orderbook) {
               <span style="width: ${consolidatedAsks[i]}%"></span>
             </div>
             </td>`
-                if (Object.keys(limits).includes(String(i))) {
-                    html +=
-                        `<td onclick="BinanceCancelOrder(${i})" style="background-color:red; color:white;">${limits[i].size}</td>`
-                } else {
-                    html += `<td onclick="BinanceCancelOrder(${i})" style="background-color:white;"></td>`
-                }
 
                 html += `<td class=bestAskCol2 onclick="BinanceFBuy(${i})"></td>`
                 if (BinanceEntryPrice === i) {
@@ -327,12 +315,6 @@ async function updateTable(orderbook) {
               <span style="width: ${consolidatedBids[i]}%;"></span>
             </div>
             </td>`
-                if (Object.keys(limits).includes(String(i))) {
-                    html +=
-                        `<td onclick="BinanceCancelOrder(${i})" style="background-color:blue; color:white;">${limits[i].size}</td>`
-                } else {
-                    html += `<td onclick="BinanceCancelOrder(${i})" style="background-color:white;"></td>`
-                }
 
 
                 if (bidMap.get(String(i)).toFixed(3) > sizeThreshold) {
@@ -380,12 +362,6 @@ async function updateTable(orderbook) {
             </td>`
 
 
-                if (Object.keys(limits).includes(String(i))) {
-                    html +=
-                        `<td onclick="BinanceCancelOrder(${i})" style="background-color:red; color:white;">${limits[i].size}</td>`
-                } else {
-                    html += `<td onclick="BinanceCancelOrder(${i})" style="background-color:white;"></td>`
-                }
 
                 html += `<td class=askCol2 onclick="BinanceFBuy(${i})"></td>`
 
@@ -423,12 +399,6 @@ async function updateTable(orderbook) {
             <td></td>`
 
 
-                if (Object.keys(limits).includes(String(i))) {
-                    html +=
-                        `<td onclick="BinanceCancelOrder(${i})" style="background-color:${(limits[i].direction == "BUY") ? "blue" : "red"}; color:white;">${limits[i].size}</td>` //MAYBE WORKS
-                } else {
-                    html += `<td onclick="BinanceCancelOrder(${i})" style="background-color:white;"></td>`
-                }
 
                 html += `<td class=askCol2 onclick="BinanceFBuy(${i})"></td>`
                 if (parseInt(candleData.high / consolidation) * consolidation === i) {
