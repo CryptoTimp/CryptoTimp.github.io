@@ -324,7 +324,7 @@ async function updateTable(orderbook) {
                 html += `<tr>
             <td>
             <div class="meterBids">
-              <span style="width: ${consolidatedBids[i]}% border-left: 0px; border-right: 0px;"></span>
+              <span style="width: ${consolidatedBids[i]}%;"></span>
             </div>
             </td>`
                 if (Object.keys(limits).includes(String(i))) {
