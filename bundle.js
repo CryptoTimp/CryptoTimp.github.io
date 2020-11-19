@@ -22,7 +22,7 @@ var updates = 0
 var lastUpdateId
 
 var distance = 30000
-var consolidation = 1
+var consolidation = 2
 var sizeThreshold = 50
 class SocketClient {
     constructor(path, baseUrl) {
@@ -324,7 +324,7 @@ async function updateTable(orderbook) {
                 html += `<tr>
             <td>
             <div class="meterBids">
-              <span style="width: ${consolidatedBids[i]}%"></span>
+              <span style="width: ${consolidatedBids[i]}% border-left: 0px; border-right: 0px;"></span>
             </div>
             </td>`
                 if (Object.keys(limits).includes(String(i))) {
@@ -375,7 +375,7 @@ async function updateTable(orderbook) {
                 html += `<tr>
             <td>
             <div class="meterAsks">
-              <span style="width: ${consolidatedAsks[i]}%"></span>
+              <span style="width: ${consolidatedAsks[i]}%; border-left: 0px; border-right: 0px;"></span>
             </div>
             </td>`
 
