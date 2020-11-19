@@ -1,0 +1,1 @@
+browserify bundle.js -o dist/bundle.js
