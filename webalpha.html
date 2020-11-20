@@ -480,14 +480,7 @@
             </li>
             <li class="nav-item">
                 <i class="icon ri-shut-down-line"></i>
-                <span class="text"><p id="close">Sign out</p></span>
-                <script>
-                    document.getElementById("close").addEventListener("click", close);
-
-                    function close() {
-                        window.close();
-                    }
-                </script>
+                <span class="text"></span>
             </li>
 
         </ul>
@@ -496,7 +489,10 @@
         .grid-stack {
             background-color: black;
             margin-left: 240px;
-            top: -80px
+            height: calc(100% - 80px);
+            height: -moz-calc(100% - 80px);
+            height: -webkit-calc(100% - 80px);
+            top: -84px
         }
         
         .grid-stack-item-content {
@@ -524,9 +520,9 @@
         
         .sidebar {
             width: 200px;
-            height: calc(100% - 90px);
-            height: -moz-calc(100% - 90px);
-            height: -webkit-calc(100% - 90px);
+            height: calc(100% - 80px);
+            height: -moz-calc(100% - 80px);
+            height: -webkit-calc(100% - 80px);
             display: flex;
             flex-direction: column;
             position: fixed;
@@ -637,14 +633,14 @@
 
     <section class="py-7">
         <div class="grid-stack">
-            <div class="grid-stack-item" data-gs-x="0" data-gs-y="0" data-gs-width="2" data-gs-height="14">
+            <div class="grid-stack-item" data-gs-x="0" data-gs-y="0" data-gs-width="2" data-gs-height="21">
                 <div class="grid-stack-item-content">
                     <script type="text/javascript" src="dist/bundle.js"></script>
                     <div id="GUI">Press F5 to Reload</div>
                     *On load, some packets are lost between Alpha and Binance. You will see stuck prices/qty up the ladder. These will correct themselves after a few minutes.
                 </div>
             </div>
-            <div class="grid-stack-item" data-gs-x="2" data-gs-y="0" data-gs-width="2" data-gs-height="14">
+            <div class="grid-stack-item" data-gs-x="2" data-gs-y="0" data-gs-width="2" data-gs-height="21">
                 <div class="grid-stack-item-content">
                     <script type="text/javascript" src="dist/eth.js"></script>
                     <div id="ETH">Press F5 to Reload</div>
