@@ -395,7 +395,14 @@
     }
 </style>
 
-<body>
+<script type="text/javascript">
+    function zoom() {
+        document.body.style.zoom = "75%"
+    }
+</script>
+
+
+<body onload="zoom()">
     <!--navigation-->
     <section class="smart-scroll">
         <div class="container-fluid">
@@ -492,7 +499,7 @@
             height: calc(100% - 80px);
             height: -moz-calc(100% - 80px);
             height: -webkit-calc(100% - 80px);
-            top: -84px
+            top: -84px;
         }
         
         .grid-stack-item-content {
@@ -504,6 +511,10 @@
         }
     </style>
     <style>
+        .zoom {
+            zoom: 2;
+        }
+        
         ul {
             margin: 0;
             padding: 0;
