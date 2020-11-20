@@ -3,7 +3,7 @@ var $ = require('jquery')
 
 const path = require('path')
 
-// var grid = GridStack.init();
+var grid = GridStack.init();
 var limits = {}
 
 var ping
