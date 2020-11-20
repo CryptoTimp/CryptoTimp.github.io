@@ -1,0 +1,690 @@
+<!doctype html>
+<html lang="en">
+
+<head>
+    <link rel="shortcut icon" type="image/x-icon" href="favicon.ico" />
+    <!-- Required meta tags -->
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
+    <title>Alpha - Web</title>
+    <meta name="description" content="Alpha" />
+
+    <!--Inter UI font-->
+    <link href="https://rsms.me/inter/inter-ui.css" rel="stylesheet">
+
+    <!--vendors styles-->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/4.7.0/css/font-awesome.min.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/slick-carousel/1.8.1/slick.min.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/slick-carousel/1.8.1/slick-theme.min.css">
+
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/gridstack@1.1.2/dist/gridstack.min.css" />
+    <script src="https://cdn.jsdelivr.net/npm/gridstack@1.1.2/dist/gridstack.all.js"></script>
+    <script src="https://cdn.plot.ly/plotly-latest.min.js"></script>
+
+    <link href="https://cdn.jsdelivr.net/npm/remixicon@2.5.0/fonts/remixicon.css" rel="stylesheet">
+
+    <!-- Bootstrap CSS / Color Scheme -->
+    <link rel="stylesheet" href="css/default.css" id="theme-color">
+    <!-- Analytics-->
+    <script>
+        window.dataLayer = window.dataLayer || [];
+
+        function gtag() {
+            dataLayer.push(arguments);
+        }
+        gtag('js', new Date());
+
+        gtag('config', 'UA-182376266-1');
+    </script>
+</head>
+
+
+<!-- GUI CSS -->
+<style>
+    /* HeaderCSS */
+    
+    .headerClass {
+        column-span: 1;
+    }
+    /* BestBidCols */
+    
+    .bestBidCol2 {
+        background-color: #0F969E;
+        border-top: 3px solid black;
+        color: white;
+        cursor: copy;
+    }
+    
+    .bestBidCol3 {
+        background-color: #CCCCCC;
+        border-top: 3px solid black;
+    }
+    
+    .bestBidCol4 {
+        background-color: #AC2E27;
+        border-top: 3px solid black;
+    }
+    /* BestAskCols */
+    
+    .bestAskCol2 {
+        background-color: #0F969E;
+        border-top: 3px solid black;
+        color: white;
+        cursor: copy;
+    }
+    
+    .bestAskCol3 {
+        background-color: #CCCCCC;
+        border-top: 3px solid black;
+    }
+    
+    .bestAskCol4 {
+        background-color: #AC2E27;
+        border-top: 3px solid black;
+    }
+    /* BestNoBidAskCols */
+    
+    .bestNBACol2 {
+        background-color: #077AB4;
+        border-top: 3px solid black;
+    }
+    
+    .bestNBACol3 {
+        background-color: #CCCCCC;
+        border-top: 3px solid black;
+    }
+    
+    .bestNBACol4 {
+        background-color: #AC2E27;
+        border-top: 3px solid black;
+    }
+    /* BidCols */
+    
+    .bidCol2 {
+        background-color: #0F969E;
+        color: white;
+        cursor: copy;
+    }
+    
+    .bidCol3 {
+        background-color: #CCCCCC;
+    }
+    
+    .bidCol4 {
+        background-color: #AC2E27;
+    }
+    
+    .bestBidCol5 {
+        background-color: #3BBA9F;
+        color: black;
+        text-align: right;
+    }
+    /* AskCols */
+    
+    .askCol2 {
+        background-color: #077AB4;
+    }
+    
+    .askCol3 {
+        background-color: #CCCCCC;
+    }
+    
+    .askCol4 {
+        background-color: #D23830;
+        color: white;
+        cursor: copy;
+    }
+    
+    .askCol5 {
+        background-color: #3BBA9F;
+        color: black;
+        text-align: right;
+    }
+    /* No Bid/Ask */
+    
+    .NBACol2 {
+        background-color: #077AB4;
+    }
+    
+    .NBACol3 {
+        background-color: #CCCCCC;
+    }
+    
+    .NBACol4 {
+        background-color: #AC2E27;
+    }
+</style>
+<!-- TABLE CSS -->
+<style>
+    @import url(https://fonts.googleapis.com/css?family=Open+Sans:600);
+    .GUI table {
+        /* border-collapse: collapse;
+    border-spacing: 0; */
+        width: 100%;
+        height: 200px;
+        table-layout: fixed;
+        transform: rotateX(0deg);
+    }
+    
+    table {
+        border-collapse: collapse;
+        border-spacing: 0;
+        width: 100%;
+        table-layout: fixed;
+        transform: rotateX(0deg);
+    }
+    
+    th,
+    td {
+        padding: 0px 0px;
+        text-align: center;
+        font-family: "Open Sans", "HelveticaNeue-Light", "Helvetica Neue Light", "Helvetica Neue", Helvetica, Arial, "Lucida Grande", Sans-Serif;
+        font-size: 11;
+        color: black;
+        table-layout: fixed;
+    }
+    
+    th {
+        background: #222;
+        ;
+        color: #fff;
+        text-align: center;
+        font-family: 'Open Sans', sans-serif;
+        position: sticky;
+        position: -webkit-sticky;
+        top: 0;
+        z-index: 999;
+    }
+    
+    tr:first-child th:first-child {
+        border-top-left-radius: 1px;
+    }
+    
+    tr:first-child th:last-child {
+        border-top-right-radius: 1px;
+    }
+    
+    td {
+        border-left: 0px solid #c6c9cc;
+        border-top: 0px solid #c6c9cc;
+        border-bottom: 0px solid #c6c9cc;
+        /* cursor: pointer; */
+    }
+    
+    td:first-child {
+        border-right: 0px solid #c6c9cc;
+        border-top: 0px solid #c6c9cc;
+        border-bottom: 0px solid #c6c9cc;
+        /* cursor: pointer; */
+    }
+    
+    tr:last-child td:first-child {
+        border-bottom-left-radius: 6px;
+    }
+    
+    tr:last-child td:last-child {
+        border-bottom-right-radius: 6px;
+    }
+    
+    input {
+        text-align: center;
+        font-family: 'Open Sans', sans-serif;
+        font-weight: bold;
+        font-size: 15;
+        width: 50%;
+        padding: 2px 2px;
+        display: inline-block;
+        border: 1px solid #ccc;
+        border-radius: 4px;
+        box-sizing: border-box;
+    }
+    
+    .Buy {
+        background: green no-repeat fixed center;
+        color: white;
+    }
+    
+    .Sell {
+        background: red no-repeat fixed center;
+        color: white;
+    }
+    
+    .allow-scroll {
+        position: relative;
+        height: 800px;
+        width: 100%;
+        overflow-y: scroll;
+        scrollbar-width: none;
+        -ms-overflow-style: none;
+        overflow-x: hidden;
+        scroll-snap-type: mandatory;
+        scroll-snap-align: y center;
+    }
+    
+     ::-webkit-scrollbar {
+        display: none;
+    }
+    
+    .button {
+        border: none;
+        background: grey;
+        color: #ffffff !important;
+        font-weight: 100;
+        padding: 4px;
+        text-transform: uppercase;
+        border-radius: 6px;
+        display: inline-block;
+        transition: all 0.3s ease 0s;
+        cursor: pointer;
+    }
+    
+    .button:hover {
+        color: white !important;
+        font-weight: 750 !important;
+        background: red;
+        transition: all 0.3s ease 0s;
+    }
+</style>
+
+<!-- LAYOUT -->
+<style>
+    #header {
+        width: 101%;
+        background-color: #545454;
+        height: 35px;
+        overflow: hidden;
+        position: sticky;
+        position: -webkit-sticky;
+        top: 0;
+        z-index: 999;
+    }
+    
+    #container {
+        width: 100%;
+        margin: auto;
+    }
+    
+    #first {
+        width: 20%;
+        float: left;
+        height: 330%;
+        background-color: #BBBBBB;
+        overflow: hidden;
+        position: fixed;
+    }
+    
+    #second {
+        width: 80%;
+        margin-left: 21%;
+        height: 1500px;
+        overflow: auto;
+    }
+    
+    #third {
+        width: 100px;
+        height: 1500px;
+        overflow: auto;
+    }
+    
+    #clear {
+        clear: both;
+    }
+</style>
+
+<!-- DOM -->
+<style>
+    .meterBids {
+        height: 13px;
+        /* Can be anything */
+        position: relative;
+        /* border-radius: 25px; */
+    }
+    
+    .meterBids>span {
+        display: block;
+        opacity: 0.6;
+        height: 100%;
+        background-color: #0F969E;
+        position: relative;
+    }
+    
+    .meterBidsInternal {
+        height: 13px;
+        /* Can be anything */
+        position: relative;
+        /* border-radius: 25px; */
+    }
+    
+    .meterBidsInternal>span {
+        display: block;
+        opacity: 0.6;
+        height: 100%;
+        background-color: black;
+        position: relative;
+    }
+    
+    .meterAccBids {
+        height: 13px;
+        /* Can be anything */
+        position: relative;
+        transform: rotate(180deg);
+        /* border-radius: 25px; */
+    }
+    
+    .meterAccBids>span {
+        display: block;
+        opacity: 0.8;
+        height: 100%;
+        background-color: gold;
+        position: relative;
+        transform: rotate(180deg);
+    }
+    
+    .meterAsks {
+        height: 13px;
+        position: relative;
+        /* border-radius: 25px; */
+    }
+    
+    .meterAsks>span {
+        display: block;
+        opacity: 0.6;
+        height: 100%;
+        background-color: #D23830;
+        position: relative;
+    }
+</style>
+
+<body>
+    <!--navigation-->
+    <section class="smart-scroll">
+        <div class="container-fluid">
+            <nav class="navbar navbar-expand-md navbar-dark">
+                <a class="navbar-brand heading-black" href="webalpha.html">
+                WebAlpha
+            </a>
+
+                <button class="navbar-toggler navbar-toggler-right border-0" type="button" data-toggle="collapse" data-target="#navbarCollapse" aria-controls="navbarCollapse" aria-expanded="false" aria-label="Toggle navigation">
+                <span data-feather="grid"></span>
+            </button>
+                <div class="collapse navbar-collapse" id="navbarCollapse">
+                    <ul class="navbar-nav ml-auto">
+                        <li class="nav-item">
+                            <a class="nav-link page-scroll" href="index.html#about">About</a>
+                        </li>
+                        <li class="nav-item">
+                            <a class="nav-link page-scroll" href="index.html#features">Features</a>
+                        </li>
+                        <li class="nav-item">
+                            <a class="nav-link page-scroll" href="demo.html">Alpha Demo</a>
+                        </li>
+                        <li class="nav-item">
+                            <a class="nav-link page-scroll" href="index.html#pricing">Alpha Pricing</a>
+                        </li>
+                        <li class="nav-item">
+                            <a class="nav-link page-scroll" href="alphabook.html">AlphaBook</a>
+                        </li>
+                        <li class="nav-item">
+                            <a class="nav-link page-scroll" href="webalpha.html">WebAlpha</a>
+                        </li>
+                        <li class="nav-item">
+                            <a class="nav-link page-scroll" href="index.html#guide">Product Guide</a>
+                        </li>
+
+                        <li class="nav-item">
+                            <a class="nav-link page-scroll" href="index.html#faq">FAQ</a>
+                        </li>
+                    </ul>
+                </div>
+            </nav>
+        </div>
+    </section>
+    <aside class="sidebar">
+        <ul class="nav-list">
+            <li class="nav-item active">
+                <i class="icon ri-home-6-line "></i>
+                <span class="text"><a  href="webalpha.html">Home</a></span>
+            </li>
+            <li class="nav-item">
+                <i class="icon ri-notification-3-line"></i>
+                <span class="text">Notification</span>
+            </li>
+            <li class="nav-item">
+                <i class="icon ri-message-3-line"></i>
+                <span class="text">Messages</span>
+            </li>
+            <li class="nav-item">
+                <i class="icon ri-computer-line"></i>
+                <span class="text"><a  href="index.html#pricing">Desktop</a></span>
+            </li>
+        </ul>
+        <div class="btn-toggle">
+            <span class="text">Collapse</span>
+            <i class="ri-arrow-left-line"></i>
+        </div>
+        <ul class="nav-list nav-bottom">
+            <li class="nav-item">
+                <i class="icon ri-restart-line"></i>
+                <span class="text" id="reload">Reload</span>
+                <script>
+                    document.getElementById("reload").addEventListener("click", reload);
+
+                    function reload() {
+                        location.reload();
+                    }
+                </script>
+            </li>
+            <li class="nav-item">
+                <i class="icon ri-settings-4-line"></i>
+                <span class="text">Settings</span>
+            </li>
+            <li class="nav-item">
+                <i class="icon ri-shut-down-line"></i>
+                <span class="text">Sign out</span>
+            </li>
+            <li class="nav-item">
+                <i class="icon ri-shut-down-line"></i>
+                <span class="text">Copyright</span>
+            </li>
+
+        </ul>
+    </aside>
+    <style>
+        .grid-stack {
+            background-color: black;
+            margin-left: 240px;
+            top: -80px
+        }
+        
+        .grid-stack-item-content {
+            color: white;
+            text-align: center;
+            background-color: #000000;
+            -webkit-font-smoothing: antialiased;
+            font-family: sans-serif;
+        }
+    </style>
+    <style>
+        ul {
+            margin: 0;
+            padding: 0;
+            list-style-type: none;
+        }
+        
+        .sidebar-toggle {
+            width: 70px !important;
+        }
+        
+        .icon-rotate {
+            transform: rotate(180deg);
+        }
+        
+        .sidebar {
+            width: 200px;
+            height: calc(100% - 150px);
+            height: -moz-calc(100% - 20px);
+            height: -webkit-calc(100% - 20px);
+            display: flex;
+            flex-direction: column;
+            position: fixed;
+            top: 60px;
+            bottom: 10px;
+            left: 35px;
+            box-sizing: border-box;
+            padding: 25px 0 10px 0;
+            background: #232931;
+            color: #ededed;
+            border-radius: 5px;
+            transition: 0.5s all ease-out;
+        }
+        
+        .nav-list .nav-item {
+            display: flex;
+            align-items: center;
+            position: relative;
+            padding: 10px 25px;
+            user-select: none;
+        }
+        
+        .nav-list .nav-item .icon {
+            font-size: 25px;
+        }
+        
+        .nav-list .nav-item .text {
+            margin-left: 10px;
+            font-size: 18px;
+        }
+        
+        .nav-list .nav-item.active {
+            color: #f73859;
+            font-weight: bolder;
+        }
+        
+        .nav-list .nav-item.active::after {
+            content: "";
+            width: 4px;
+            height: 30px;
+            position: absolute;
+            top: 9px;
+            left: 0;
+            background: #f73859;
+            border-radius: 999px;
+        }
+        
+        .nav-bottom {
+            position: relative;
+            padding-top: 10px;
+            border-top: 1px solid #bdbdbd;
+        }
+        
+        .nav-bottom .nav-item {
+            color: #bdbdbd;
+            padding-bottom: 5px;
+            padding-top: 5px;
+        }
+        
+        .nav-bottom .nav-item .icon {
+            font-size: 20px;
+        }
+        
+        .nav-bottom .nav-item .text {
+            font-size: 16px;
+        }
+        
+        .btn-toggle {
+            margin-top: auto;
+            text-align: center;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            padding: 10px 0;
+            user-select: none;
+        }
+        
+        .btn-toggle span:first-child {
+            margin-right: 10px;
+        }
+        
+        .btn-toggle i {
+            transition: 0.5s all ease-out;
+        }
+        
+        .text {
+            white-space: nowrap;
+            cursor: pointer;
+        }
+    </style>
+    <script>
+        var btnToggle = document.querySelector(".btn-toggle");
+        var btnToggleIcon = document.querySelector(".btn-toggle i");
+        var sidebar = document.querySelector(".sidebar");
+        var texts = document.querySelectorAll(".text");
+        btnToggle.addEventListener("click", (e) => {
+            for (var text of texts) {
+                if (!sidebar.classList.contains("sidebar-toggle")) {
+                    text.style.display = "none";
+                } else {
+                    text.style.display = "block";
+                }
+            }
+            btnToggleIcon.classList.toggle("icon-rotate")
+            sidebar.classList.toggle("sidebar-toggle");
+        });
+    </script>
+
+    <section class="py-7">
+        <div class="grid-stack">
+            <div class="grid-stack-item" data-gs-x="0" data-gs-y="0" data-gs-width="2" data-gs-height="14">
+                <div class="grid-stack-item-content">
+                    <script type="text/javascript" src="dist/bundle.js"></script>
+                    <div id="GUI">Press F5 to Reload</div>
+                    *On load, some packets are lost between Alpha and Binance. You will see stuck prices/qty up the ladder. These will correct themselves after a few minutes.
+                </div>
+            </div>
+            <div class="grid-stack-item" data-gs-x="2" data-gs-y="0" data-gs-width="2" data-gs-height="14">
+                <div class="grid-stack-item-content">
+                    <script type="text/javascript" src="dist/eth.js"></script>
+                    <div id="ETH">Press F5 to Reload</div>
+                    *On load, some packets are lost between Alpha and Binance. You will see stuck prices/qty up the ladder. These will correct themselves after a few minutes.
+                </div>
+            </div>
+        </div>
+    </section>
+
+
+    <!-- hero header
+    <section class="py-7 py-md-12 bg-hero" id="Blog">
+        <div class="container">
+            <div class="row vh-md-50">
+                <div class="col-md-12 col-sm-12 col-12 mx-auto my-auto text-center">
+                    <h1 class="heading-black text-capitalize">Depth of Market Ladder</h1>
+                    <a href="index.html#pricing" target="_blank" class="btn btn-light">
+                        Pricing
+                        </a>
+                    <hr class="solid">
+                    <script type="text/javascript" src="dist/eth.js"></script>
+                    <table id="ETH">Press F5 to Reload</table>
+                    *On load, some packets are lost between Alpha and Binance. You will see stuck prices/qty up the ladder. These will correct themselves after a few minutes.
+                </div>
+            </div>
+        </div>
+    </section> -->
+    <center>
+        <div class="scroll-top">
+            <i class="fa fa-angle-up" aria-hidden="true"></i>
+        </div>
+
+        <!-- jQuery first, then Popper.js, then Bootstrap JS -->
+        <script src="https://code.jquery.com/jquery-3.2.1.min.js"></script>
+        <script src="https://cdnjs.cloudflare.com/ajax/libs/popper.js/1.12.9/umd/popper.min.js"></script>
+        <script src="https://maxcdn.bootstrapcdn.com/bootstrap/4.0.0/js/bootstrap.min.js"></script>
+        <script src="https://cdnjs.cloudflare.com/ajax/libs/feather-icons/4.7.3/feather.min.js"></script>
+        <script src="https://cdnjs.cloudflare.com/ajax/libs/slick-carousel/1.8.1/slick.min.js"></script>
+        <script src="js/scripts.js"></script>
+</body>
+
+</html>
+
+<!-- Global site tag (gtag.js) - Google Analytics -->
+<script async src="https://www.googletagmanager.com/gtag/js?id=UA-182376266-1">
+</script>

@@ -2,7 +2,7 @@ var _ = require('lodash')
 var $ = require('jquery')
 
 const path = require('path')
-
+var grid = GridStack.init();
 
 var limits = {}
 
@@ -239,10 +239,9 @@ async function updateTable(orderbook) {
     var askMap = truncateAskMap(askbid, renderDistance)
 
 
-
     let html = `<table>`
     html +=
-        `<tr><th colspan="1">DOM</th><th colspan="1">Bids</th><th colspan="1">Price</th><th colspan="1">Asks</th><th colspan="1">T: ${numberTrades}</th></tr>`
+        `<tr><th colspan="1">DOM</th><th colspan="1">Bids</th><th colspan="1">BTCUSDT</th><th colspan="1">Asks</th><th colspan="1">T: ${numberTrades}</th></tr>`
     for (var i = centrePrice + 100; i > centrePrice - 100; i -= consolidation) {
         if (consolidate(lastPrice.price) == i) {
             var directionColour = lastPrice.direction ? "#D23830" : "#0F969E"
@@ -424,13 +423,15 @@ async function updateTable(orderbook) {
     html += '</table>'
         //console.log(html)
     document.getElementById("GUI").innerHTML = html;
-    // document.getElementById("headerAccBids").innerHTML = sum(consolidatedBids).toFixed(0);
-    // document.getElementById("headerAccAsks").innerHTML = sum(consolidatedAsks).toFixed(0);
-
-    // ping = Number(Date.now())-Number(candleData.time)
-    // //console.log(ping)
-    // document.getElementById("ping").innerHTML = ping+"ms";
 }
+// document.getElementById("headerAccBids").innerHTML = sum(consolidatedBids).toFixed(0);
+// document.getElementById("headerAccAsks").innerHTML = sum(consolidatedAsks).toFixed(0);
+
+// ping = Number(Date.now())-Number(candleData.time)
+// //console.log(ping)
+// document.getElementById("ping").innerHTML = ping+"ms";
+
+
 
 // function sum(obj) {
 //     var sum = 0;
@@ -634,6 +635,6 @@ setInterval(dimvalVP, 500)
 
 function resetDistance() {
     centrePrice = Math.round(Number(rawprice) / consolidation) * consolidation;
-    Notiflix.Notify.Warning(`Recalculating Range`);
+    // Notiflix.Notify.Warning(`Recalculating Range`);
 }
 setInterval(resetDistance, distance)
