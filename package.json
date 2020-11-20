@@ -5,6 +5,7 @@
   "main": "test.js",
   "dependencies": {
     "browserify-shim": "^3.8.14",
+    "gridstack": "^2.2.0",
     "jquery": "^3.5.1",
     "lodash": "^4.17.20",
     "node-binance-api": "^0.12.2",

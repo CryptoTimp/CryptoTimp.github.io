@@ -10,7 +10,14 @@ var ping
 
 
 const Notiflix = require('notiflix')
-    //Require Package
+
+notify()
+
+function notify() {
+    Notiflix.Notify.Success('Connected');
+}
+
+
 var Client = require('node-rest-client').Client;
 var client = new Client();
 
