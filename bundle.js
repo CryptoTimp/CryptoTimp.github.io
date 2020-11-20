@@ -21,7 +21,7 @@ var orderbook = {
 var updates = 0
 var lastUpdateId
 
-var distance = 30000
+var distance = 10000
 var consolidation = 2
 var sizeThreshold = 50
 class SocketClient {

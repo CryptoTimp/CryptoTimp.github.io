@@ -21,7 +21,7 @@ var orderbook = {
 var updates = 0
 var lastUpdateId
 
-var distance = 30000
+var distance = 10000
 var consolidation = 1
 var sizeThreshold = 5000
 class SocketClient {
@@ -242,7 +242,7 @@ async function updateTable(orderbook) {
     try {
         let html = `<table>`
         html +=
-            `<tr><th colspan="1">DOM</th><th colspan="1">Bids</th><th colspan="1">Price</th><th colspan="1">Asks</th><th colspan="1">T: ${numberTrades}</th></tr>`
+            `<tr><th colspan="1">DOM</th><th colspan="1">ETHUSDT</th><th colspan="1">Price</th><th colspan="1">Asks</th><th colspan="1">T: ${numberTrades}</th></tr>`
         for (var i = centrePrice + 100; i > centrePrice - 100; i -= consolidation) {
             if (consolidate(lastPrice.price) == i) {
                 var directionColour = lastPrice.direction ? "#D23830" : "#0F969E"
