@@ -257,12 +257,12 @@ async function updateTable(orderbook) {
 
                 if (bidMap.get(String(i)).toFixed(3) > sizeThreshold) {
                     html +=
-                        `<td style="background-color:gold;" onclick="BinanceFBuy(${i})">${bidMap.get(String(i)).toFixed(3)}</td>`
+                        `<td style="background-color:gold;" class=bestBidCol2 onclick="BinanceFBuy(${i})">${bidMap.get(String(i)).toFixed(3)}</td>`
 
 
                 } else {
                     html +=
-                        `<td class=bidCol2 onclick="BinanceFBuy(${i})">${bidMap.get(String(i)).toFixed(3)}</td>`
+                        `<td class=bestBidCol2 onclick="BinanceFBuy(${i})">${bidMap.get(String(i)).toFixed(3)}</td>`
                 }
 
                 if (BinanceEntryPrice === i) {
