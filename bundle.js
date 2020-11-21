@@ -14,7 +14,8 @@ const Notiflix = require('notiflix')
 notify()
 
 function notify() {
-    Notiflix.Notify.Success('DOM Connected');
+    Notiflix.Report.Info('Welcome', 'WebAlpha is currently under construction! :)', 'Enter');
+    Notiflix.Notify.Success('Pricing Server Connected');
 }
 
 
