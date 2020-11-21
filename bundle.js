@@ -14,7 +14,7 @@ const Notiflix = require('notiflix')
 notify()
 
 function notify() {
-    Notiflix.Notify.Success('Connected');
+    Notiflix.Notify.Success('DOM Connected');
 }
 
 
