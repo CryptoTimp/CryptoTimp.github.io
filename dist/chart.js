@@ -39649,7 +39649,7 @@ module.exports = RestClient;
  });
 
  function CallData() {
-     restClient.candle(1, (new Date()).getTime() - 86400000, (new Date()).getTime(), (d) => {
+     restClient.candle(1, (new Date()).getTime() - 43200000, (new Date()).getTime(), (d) => {
 
 
          //console.log(d)

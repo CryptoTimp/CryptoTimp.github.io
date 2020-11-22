@@ -21,6 +21,7 @@
     <script src="https://cdn.jsdelivr.net/npm/gridstack@1.1.2/dist/gridstack.all.js"></script>
 
     <link href="https://cdn.jsdelivr.net/npm/remixicon@2.5.0/fonts/remixicon.css" rel="stylesheet">
+    <script src="https://code.highcharts.com/highcharts.js"></script>
 
     <!-- <script src="https://d3js.org/d3.v4.min.js"></script>
     <script src="https://techanjs.org/techan.min.js"></script> -->
@@ -724,7 +725,7 @@
             border-top: 1.1em solid rgba(255, 255, 255, 0.2);
             border-right: 1.1em solid rgba(255, 255, 255, 0.2);
             border-bottom: 1.1em solid rgba(255, 255, 255, 0.2);
-            border-left: 1.1em solid #ffffff;
+            border-left: 1.1em solid #1de9b6;
             -webkit-transform: translateZ(0);
             -ms-transform: translateZ(0);
             transform: translateZ(0);
@@ -771,6 +772,14 @@
             sidebar.classList.toggle("sidebar-toggle");
         });
     </script>
+    <style>
+        #container {
+            min-width: 500px;
+            max-width: 1040px;
+            height: 400px;
+            margin: 0 auto;
+        }
+    </style>
     <section class="py-7">
 
         <div class="grid-stack">
@@ -794,6 +803,14 @@
                     <p>Calculating Prices</p>
                 </div>
             </div>
+            <!-- <div class="grid-stack-item" data-gs-x="7" data-gs-y="11" data-gs-width="4" data-gs-height="5" data-gs-no-move="no" data-gs-no-resize="no">
+                <div class="grid-stack-item-content">
+
+                    <div id="container">
+
+                    </div>
+                </div>
+            </div> -->
             <div class="grid-stack-item" data-gs-x="7" data-gs-y="0" data-gs-width="5" data-gs-height="10" data-gs-no-move="yes" data-gs-no-resize="yes">
                 <div class="grid-stack-item-content">
 
@@ -878,12 +895,6 @@
                             <div class="loader"></div>
                             </div>
                             </div>
-                            <div class="grid-stack-item" data-gs-x="12" data-gs-y="17" data-gs-width="1" data-gs-height="1" data-gs-no-move="no" data-gs-no-resize="no">
-                                <div class="grid-stack-item-content">
-
-                                    UNDER CONSTRUCTION
-                                </div>
-                            </div>
                             </div>
 
     </section>
@@ -905,7 +916,7 @@
     <script type="text/javascript" src="dist/chart.js"></script>
     <script type="text/javascript" src="dist/tickerBTC.js"></script>
     <script type="text/javascript" src="dist/tickerETH.js"></script>
-
+    <script type="text/javascript" src="dist/depth.js"></script>
 
 </body>
 

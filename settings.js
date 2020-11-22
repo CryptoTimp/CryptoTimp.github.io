@@ -28,7 +28,7 @@ var settings = {
     },
     BinanceTOS: {
         sizeThreshold: 1000,
-        tableLength: 100,
+        tableLength: 25,
         highlightThreshold1: 100000,
         highlightThreshold2: 500000,
         highlightThreshold3: 1000000,
