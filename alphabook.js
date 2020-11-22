@@ -1,3 +1,5 @@
+const { update } = require("lodash");
+
 var backgroundA = 'black'
 var backgroundB = 'black'
 
@@ -80,7 +82,7 @@ wsBTCUSDT.addEventListener('message', function incoming(event) {
     document.getElementById('BTCUSDTBIDSIZE').innerHTML = BTCUSDTBIDSIZE;
     document.getElementById('BTCUSDTASKSIZE').innerHTML = BTCUSDTASKSIZE;
 
-    adjustBTC()
+
 
 
     if (BTCUSDTBIDSIZE > BTCUSDTASKSIZE) {
@@ -177,7 +179,6 @@ wsETHUSDT.addEventListener('message', function incoming(event) {
     document.getElementById('ETHUSDTBIDSIZE').innerHTML = ETHUSDTBIDSIZE;
     document.getElementById('ETHUSDTASKSIZE').innerHTML = ETHUSDTASKSIZE;
 
-    adjustETH()
 
 
     if (ETHUSDTBIDSIZE > ETHUSDTASKSIZE) {
@@ -194,3 +195,9 @@ function adjustETH() {
     ETHCHART.data.datasets[0].data[1] = ETHUSDTASKSIZE;
     ETHCHART.update();
 }
+
+function updateValues() {
+    adjustETH()
+    adjustBTC()
+}
+setInterval(updateValues, 500)

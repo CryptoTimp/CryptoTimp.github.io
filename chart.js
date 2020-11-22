@@ -104,7 +104,7 @@
          candleSeries.setData(data);
      })
  }
- setInterval(CallData, 2000)
+ setInterval(CallData, 1000)
  CallData()
 
 
