@@ -1,12 +1,26 @@
 (function(){function r(e,n,t){function o(i,f){if(!n[i]){if(!e[i]){var c="function"==typeof require&&require;if(!f&&c)return c(i,!0);if(u)return u(i,!0);var a=new Error("Cannot find module '"+i+"'");throw a.code="MODULE_NOT_FOUND",a}var p=n[i]={exports:{}};e[i][0].call(p.exports,function(r){var n=e[i][1][r];return o(n||r)},p,p.exports,r,e,n,t)}return n[i].exports}for(var u="function"==typeof require&&require,i=0;i<t.length;i++)o(t[i]);return o}return r})()({1:[function(require,module,exports){
+// const Binance = require('node-binance-api');
+// const binance = new Binance().options({
+//     APIKEY: "",
+//     APISECRET: "",
+// });
+
+// LongShort()
+
+
+// async function LongShort() {
+//     result = await binance.longshort('BTCUSDT', '5m');
+//     console.log(result);
+// }
+
 const { update } = require("lodash");
 
 var backgroundA = 'black'
 var backgroundB = 'black'
 
-const ctxBTC = document.getElementById('BTCUSDT').getContext('2d');
-const BTCCHART = new Chart(ctxBTC, {
-    type: 'bar',
+const ctxBTCRATIO = document.getElementById('BTCUSDTRATIO').getContext('2d');
+const BTCCHARTRATIO = new Chart(ctxBTCRATIO, {
+    type: 'pie',
     backgroundColor: 'red',
     data: {
         labels: ['B', 'A'],
@@ -16,6 +30,13 @@ const BTCCHART = new Chart(ctxBTC, {
         }]
     },
     options: {
+        title: {
+            display: true,
+            fontColor: "white",
+            fontStyle: "bold",
+            fontSize: 18,
+            text: 'Long/Short Ratio'
+        },
         responsive: true,
         maintainAspectRatio: false,
         legend: {
@@ -47,57 +68,11 @@ const BTCCHART = new Chart(ctxBTC, {
         }
     }
 });
-var wsBTCUSDTBOOK = new WebSocket('wss://fstream.binance.com/stream?streams=btcusdt@depth5@100ms');
-wsBTCUSDTBOOK.addEventListener('message', function incoming(event) {
-    response = JSON.parse(event.data)
-        //console.log(response)
-    BTCBIDS = ((response.data.a))
-    BTCASKS = ((response.data.b))
-
-    var btcbooktable = '<table>'
-
-    for (var i in BTCBIDS) {
-        btcbooktable +=
-            `<tr><td style="background-color: #232931; color:white;">${Number(BTCASKS[i][1]).toFixed(2)}</td><td style="background-color: #132E25; color:#1de9b6;">${Number(BTCASKS[i][0]).toFixed(1)}</td><td style="background-color: #401828; color:#1de9b6;">${Number(BTCBIDS[i][0]).toFixed(1)}</td><td style="background-color: #232931; color:white;">${Number(BTCBIDS[i][1]).toFixed(2)}</td>`
-
-    }
-
-    btcbooktable += '</table>'
-    document.getElementById("BTCBOOK").innerHTML = btcbooktable;
 
 
-})
-
-var wsBTCUSDT = new WebSocket('wss://fstream.binance.com/stream?streams=btcusdt@bookTicker');
-wsBTCUSDT.addEventListener('message', function incoming(event) {
-    response = JSON.parse(event.data)
-        //console.log((response.data))
-
-    BTCUSDTBID = response.data.b
-    BTCUSDTASK = response.data.a
-    BTCUSDTBIDSIZE = response.data.B
-    BTCUSDTASKSIZE = response.data.A
-
-    document.getElementById('BTCUSDTBID').innerHTML = BTCUSDTBID;
-    document.getElementById('BTCUSDTASK').innerHTML = BTCUSDTASK;
-    document.getElementById('BTCUSDTBIDSIZE').innerHTML = BTCUSDTBIDSIZE;
-    document.getElementById('BTCUSDTASKSIZE').innerHTML = BTCUSDTASKSIZE;
-
-
-
-
-
-})
-
-function adjustBTC() {
-    BTCCHART.data.datasets[0].data[0] = BTCUSDTBIDSIZE;
-    BTCCHART.data.datasets[0].data[1] = BTCUSDTASKSIZE;
-    BTCCHART.update();
-}
-
-const ctxETH = document.getElementById('ETHUSDT').getContext('2d');
-const ETHCHART = new Chart(ctxETH, {
-    type: 'bar',
+const ctxBTCTAKER = document.getElementById('BTCUSDTTAKERVOLUME').getContext('2d');
+const BTCCHARTTAKER = new Chart(ctxBTCTAKER, {
+    type: 'pie',
     backgroundColor: 'red',
     data: {
         labels: ['B', 'A'],
@@ -107,6 +82,13 @@ const ETHCHART = new Chart(ctxETH, {
         }]
     },
     options: {
+        title: {
+            display: true,
+            fontColor: "white",
+            fontStyle: "bold",
+            fontSize: 18,
+            text: 'Taker Buy/Sell Volume'
+        },
         responsive: true,
         maintainAspectRatio: false,
         legend: {
@@ -138,59 +120,6 @@ const ETHCHART = new Chart(ctxETH, {
         }
     }
 });
-var wsETHUSDTBOOK = new WebSocket('wss://fstream.binance.com/stream?streams=ethusdt@depth5@100ms');
-wsETHUSDTBOOK.addEventListener('message', function incoming(event) {
-    response = JSON.parse(event.data)
-        //console.log(response)
-    ETHBIDS = ((response.data.a))
-    ETHASKS = ((response.data.b))
-
-    var ethbooktable = '<table>'
-
-    for (var i in ETHBIDS) {
-        ethbooktable +=
-            `<tr><td style="background-color: #232931; color:white;">${Number(ETHASKS[i][1]).toFixed(2)}</td><td style="background-color: #132E25; color:#1de9b6;">${Number(ETHASKS[i][0]).toFixed(1)}</td><td style="background-color: #401828; color:#1de9b6;">${Number(ETHBIDS[i][0]).toFixed(1)}</td><td style="background-color: #232931; color:white;">${Number(ETHBIDS[i][1]).toFixed(2)}</td>`
-
-    }
-
-    ethbooktable += '</table>'
-    document.getElementById("ETHBOOK").innerHTML = ethbooktable;
-
-
-})
-
-var wsETHUSDT = new WebSocket('wss://fstream.binance.com/stream?streams=ethusdt@bookTicker');
-wsETHUSDT.addEventListener('message', function incoming(event) {
-    response = JSON.parse(event.data)
-        //console.log((response.data))
-
-    ETHUSDTBID = response.data.b
-    ETHUSDTASK = response.data.a
-    ETHUSDTBIDSIZE = response.data.B
-    ETHUSDTASKSIZE = response.data.A
-
-    document.getElementById('ETHUSDTBID').innerHTML = ETHUSDTBID;
-    document.getElementById('ETHUSDTASK').innerHTML = ETHUSDTASK;
-    document.getElementById('ETHUSDTBIDSIZE').innerHTML = ETHUSDTBIDSIZE;
-    document.getElementById('ETHUSDTASKSIZE').innerHTML = ETHUSDTASKSIZE;
-
-
-
-
-
-})
-
-function adjustETH() {
-    ETHCHART.data.datasets[0].data[0] = ETHUSDTBIDSIZE;
-    ETHCHART.data.datasets[0].data[1] = ETHUSDTASKSIZE;
-    ETHCHART.update();
-}
-
-function updateValues() {
-    adjustETH()
-    adjustBTC()
-}
-setInterval(updateValues, 500)
 },{"lodash":2}],2:[function(require,module,exports){
 (function (global){(function (){
 /**

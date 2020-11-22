@@ -85,12 +85,6 @@ wsBTCUSDT.addEventListener('message', function incoming(event) {
 
 
 
-    if (BTCUSDTBIDSIZE > BTCUSDTASKSIZE) {
-        document.getElementById('BTCUSDTDIV').style.backgroundColor = backgroundA;
-    } else {
-        document.getElementById('BTCUSDTDIV').style.backgroundColor = backgroundB;
-    }
-
 
 })
 
@@ -181,11 +175,6 @@ wsETHUSDT.addEventListener('message', function incoming(event) {
 
 
 
-    if (ETHUSDTBIDSIZE > ETHUSDTASKSIZE) {
-        document.getElementById('ETHUSDTDIV').style.backgroundColor = backgroundA;
-    } else {
-        document.getElementById('ETHUSDTDIV').style.backgroundColor = backgroundB;
-    }
 
 
 })

@@ -529,9 +529,21 @@
     <aside class="sidebar">
         <ul class="nav-list">
             <li class="nav-item active">
-                <i class="icon ri-home-6-line "></i>
-                <span class="text"><a  href="webalpha.html">Home</a></span>
+                <i class="icon ri-stock-line "></i>
+                <span class="text"><a  href="webalpha.html">Futures</a></span>
             </li>
+            <!-- <li class="nav-item">
+                <i class="icon ri-dashboard-line"></i>
+                <span class="text"><a  href="">Layout 1</a></span>
+            </li>
+            <li class="nav-item">
+                <i class="icon ri-dashboard-line"></i>
+                <span class="text"><a  href="">Layout 2</a></span>
+            </li>
+            <li class="nav-item">
+                <i class="icon ri-dashboard-line"></i>
+                <span class="text"><a  href="">Layout 3</a></span>
+            </li> -->
             <!-- <li class="nav-item">
                 <i class="icon ri-notification-3-line"></i>
                 <span class="text">Notification</span>
@@ -540,6 +552,11 @@
                 <i class="icon ri-message-3-line"></i>
                 <span class="text">Messages</span>
             </li> -->
+            <li class="nav-item">
+                <i class="icon ri-safe-line"></i>
+                <span class="text"><a  >Options</a></span>
+            </li>
+
             <li class="nav-item">
                 <i class="icon ri-computer-line"></i>
                 <span class="text"><a  href="index.html#pricing">Desktop</a></span>
@@ -820,6 +837,18 @@
                     <p>Calculating Prices</p>
                 </div>
             </div>
+            <div class="grid-stack-item" data-gs-x="7" data-gs-y="11" data-gs-width="1" data-gs-height="3" data-gs-no-move="no" data-gs-no-resize="no">
+                <div class="grid-stack-item-content">
+
+                    <center><canvas id="BTCUSDTRATIO"></canvas></center>
+                </div>
+            </div>
+            <div class="grid-stack-item" data-gs-x="8" data-gs-y="11" data-gs-width="1" data-gs-height="3" data-gs-no-move="no" data-gs-no-resize="no">
+                <div class="grid-stack-item-content">
+
+                    <center><canvas id="BTCUSDTTAKERVOLUME"></canvas></center>
+                </div>
+            </div>
             <div class="grid-stack-item" data-gs-x="1" data-gs-y="17" data-gs-width="1" data-gs-height="4" data-gs-no-move="no" data-gs-no-resize="no">
                 <div class="grid-stack-item-content">
 
@@ -916,7 +945,7 @@
     <script type="text/javascript" src="dist/tickerBTC.js"></script>
     <script type="text/javascript" src="dist/tickerETH.js"></script>
     <script type="text/javascript" src="dist/depth.js"></script>
-
+    <script type="text/javascript" src="dist/longshort.js"></script>
 </body>
 
 </html>
