@@ -190,7 +190,7 @@ function updateValues() {
     adjustETH()
     adjustBTC()
 }
-setInterval(updateValues, 500)
+setInterval(updateValues, 1500)
 },{"lodash":2}],2:[function(require,module,exports){
 (function (global){(function (){
 /**

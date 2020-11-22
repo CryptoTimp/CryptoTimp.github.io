@@ -189,4 +189,4 @@ function updateValues() {
     adjustETH()
     adjustBTC()
 }
-setInterval(updateValues, 500)
+setInterval(updateValues, 1500)
