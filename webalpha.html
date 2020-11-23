@@ -22,6 +22,8 @@
 
     <link href="https://cdn.jsdelivr.net/npm/remixicon@2.5.0/fonts/remixicon.css" rel="stylesheet">
 
+    <script src='https://cdn.plot.ly/plotly-latest.min.js'></script>
+
     <!-- <script src="https://d3js.org/d3.v4.min.js"></script>
     <script src="https://techanjs.org/techan.min.js"></script> -->
 
@@ -799,7 +801,7 @@
     <section class="py-7">
 
         <div class="grid-stack">
-            <div class="grid-stack-item" data-gs-x="0" data-gs-y="0" data-gs-width="2" data-gs-height="17" data-gs-no-move="no" data-gs-no-resize="no">
+            <div class="grid-stack-item" data-gs-x="0" data-gs-y="0" data-gs-width="2" data-gs-height="14" data-gs-no-move="no" data-gs-no-resize="no">
                 <div class="grid-stack-item-content">
 
                     <div id="GUI">
@@ -809,7 +811,7 @@
                     <p>Calculating Prices</p>
                 </div>
             </div>
-            <div class="grid-stack-item" data-gs-x="2" data-gs-y="0" data-gs-width="2" data-gs-height="17" data-gs-no-move="no" data-gs-no-resize="no">
+            <div class="grid-stack-item" data-gs-x="2" data-gs-y="0" data-gs-width="2" data-gs-height="14" data-gs-no-move="no" data-gs-no-resize="no">
                 <div class="grid-stack-item-content">
 
                     <div id="ETH">
@@ -827,29 +829,45 @@
                     </div>
                 </div>
             </div> -->
-            <div class="grid-stack-item" data-gs-x="7" data-gs-y="0" data-gs-width="5" data-gs-height="10" data-gs-no-move="yes" data-gs-no-resize="yes">
+            <div class="grid-stack-item" data-gs-x="4" data-gs-y="1" data-gs-width="4" data-gs-height="11" data-gs-no-move="yes" data-gs-no-resize="yes">
                 <div class="grid-stack-item-content">
 
                     <div id="chart">
 
                     </div>
-                    <div class="loader"></div>
-                    <p>Calculating Prices</p>
+
                 </div>
             </div>
-            <div class="grid-stack-item" data-gs-x="7" data-gs-y="11" data-gs-width="1" data-gs-height="3" data-gs-no-move="no" data-gs-no-resize="no">
+            <div class="grid-stack-item" data-gs-x="4" data-gs-y="13" data-gs-width="4" data-gs-height="11" data-gs-no-move="yes" data-gs-no-resize="yes">
+                <div class="grid-stack-item-content">
+
+                    <div id="charteth">
+
+                    </div>
+
+                </div>
+            </div>
+            <div class="grid-stack-item" data-gs-x="10" data-gs-y="11" data-gs-width="1" data-gs-height="3" data-gs-no-move="no" data-gs-no-resize="no">
                 <div class="grid-stack-item-content">
 
                     <center><canvas id="BTCUSDTRATIO"></canvas></center>
                 </div>
             </div>
-            <div class="grid-stack-item" data-gs-x="8" data-gs-y="11" data-gs-width="1" data-gs-height="3" data-gs-no-move="no" data-gs-no-resize="no">
+            <div class="grid-stack-item" data-gs-x="11" data-gs-y="11" data-gs-width="1" data-gs-height="3" data-gs-no-move="no" data-gs-no-resize="no">
                 <div class="grid-stack-item-content">
 
                     <center><canvas id="BTCUSDTTAKERVOLUME"></canvas></center>
                 </div>
             </div>
-            <div class="grid-stack-item" data-gs-x="1" data-gs-y="17" data-gs-width="1" data-gs-height="4" data-gs-no-move="no" data-gs-no-resize="no">
+            <div class="grid-stack-item" data-gs-x="11" data-gs-y="11" data-gs-width="2" data-gs-height="5" data-gs-no-move="no" data-gs-no-resize="no">
+                <div class="grid-stack-item-content">
+
+                    <center>
+                        <div id="myDiv" style="color: white;"></div>
+                    </center>
+                </div>
+            </div>
+            <div class="grid-stack-item" data-gs-x="8" data-gs-y="0" data-gs-width="2" data-gs-height="11" data-gs-no-move="no" data-gs-no-resize="no">
                 <div class="grid-stack-item-content">
 
                     <div id="BinanceTOS">
@@ -859,7 +877,7 @@
                     <p>Connecting</p>
                 </div>
             </div>
-            <div class="grid-stack-item" data-gs-x="3" data-gs-y="17" data-gs-width="1" data-gs-height="4" data-gs-no-move="no" data-gs-no-resize="no">
+            <div class="grid-stack-item" data-gs-x="8" data-gs-y="11" data-gs-width="2" data-gs-height="10" data-gs-no-move="no" data-gs-no-resize="no">
                 <div class="grid-stack-item-content">
 
                     <div id="TOSETH">
@@ -869,7 +887,7 @@
                     <p>Connecting</p>
                 </div>
             </div>
-            <div class="grid-stack-item" data-gs-x="0" data-gs-y="17" data-gs-width="1" data-gs-height="4" style="  border-radius: 5px;">
+            <div class="grid-stack-item" data-gs-x="0" data-gs-y="17" data-gs-width="2" data-gs-height="7" style="  border-radius: 5px;">
                 <div class="grid-stack-item-content" id="BTCUSDTDIV" style="  border-radius: 5px;">
 
                     <table>
@@ -891,12 +909,12 @@
                             <div id="BTCUSDTASKSIZE" style="background-color: #232931; color: white">
                         </td>
                     </table>
-                    <center><canvas id="BTCUSDT"></canvas></center>
+                    <!-- <center><canvas id="BTCUSDT"></canvas></center> -->
                     <table id="BTCBOOK"></table>
                     <div class="loader"></div>
                     </div>
                     </div>
-                    <div class="grid-stack-item" data-gs-x="2" data-gs-y="17" data-gs-width="1" data-gs-height="4" style="  border-radius: 5px;">
+                    <div class="grid-stack-item" data-gs-x="2" data-gs-y="17" data-gs-width="2" data-gs-height="7" style="  border-radius: 5px;">
                         <div class="grid-stack-item-content" id="ETHUSDTDIV" style="  border-radius: 5px;">
 
                             <table>
@@ -918,7 +936,7 @@
                                     <div id="ETHUSDTASKSIZE" style="background-color: #232931; color: white">
                                 </td>
                             </table>
-                            <center><canvas id="ETHUSDT"></canvas></center>
+                            <!-- <center><canvas id="ETHUSDT"></canvas></center> -->
                             <table id="ETHBOOK"></table>
                             <div class="loader"></div>
                             </div>
@@ -946,6 +964,8 @@
     <script type="text/javascript" src="dist/tickerETH.js"></script>
     <script type="text/javascript" src="dist/depth.js"></script>
     <script type="text/javascript" src="dist/longshort.js"></script>
+    <script type="text/javascript" src="dist/futures.js"></script>
+    <script type="text/javascript" src="dist/testbed.js"></script>
 </body>
 
 </html>

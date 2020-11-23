@@ -39290,145 +39290,145 @@ var Client = require('node-rest-client').Client;
 var createHash = require('create-hash');
 var Q = require("q");
 var Url = require('url');
-var http  = require('http');
+var http = require('http');
 var https = require('https');
 var debug = require('debug')('deribit-api');
 
 function RestClient(key, secret, url) {
-  if (url === void 0) { url = "https://www.deribit.com" };
+    if (url === void 0) { url = "https://www.deribit.com" };
 
-  var parsedUrl = Url.parse(url);
+    var parsedUrl = Url.parse(url);
 
-  if (parsedUrl.host == null || parsedUrl.host == "" || parsedUrl.protocol == null) {
-    throw new Error("Wrong url");
-  }
+    if (parsedUrl.host == null || parsedUrl.host == "" || parsedUrl.protocol == null) {
+        throw new Error("Wrong url");
+    }
 
-  this.url = parsedUrl.protocol + "//" + parsedUrl.host;  
-  debug("url: %s", url);
+    this.url = parsedUrl.protocol + "//" + parsedUrl.host;
+    debug("url: %s", url);
 
-  var keepAliveAgent;
-  if (parsedUrl.protocol == "https:") {
-    keepAliveAgent = new https.Agent({keepAlive: true});
-  } else {
-    keepAliveAgent = new http.Agent({keepAlive: true});
-  }
+    var keepAliveAgent;
+    if (parsedUrl.protocol == "https:") {
+        keepAliveAgent = new https.Agent({ keepAlive: true });
+    } else {
+        keepAliveAgent = new http.Agent({ keepAlive: true });
+    }
 
-  this.client = new Client();
-  this.client.connection.agent = keepAliveAgent;
+    this.client = new Client();
+    this.client.connection.agent = keepAliveAgent;
 
-  this.key = key;
-  this.secret = secret;
+    this.key = key;
+    this.secret = secret;
 };
 
 RestClient.prototype.objectToString = function(obj, encode) {
-  var result = [];
-  Object.keys(obj).sort().forEach((key) => {
-    var value = obj[key];
-    if (Array.isArray(value) && !encode) {
-      value = value.join('');
-    } else if(encode) {
-      value = encodeURIComponent(value);
-    }
+    var result = [];
+    Object.keys(obj).sort().forEach((key) => {
+        var value = obj[key];
+        if (Array.isArray(value) && !encode) {
+            value = value.join('');
+        } else if (encode) {
+            value = encodeURIComponent(value);
+        }
 
-    if (encode) {
-      key = encodeURIComponent(key);
-    }
+        if (encode) {
+            key = encodeURIComponent(key);
+        }
 
-    result.push(key + "=" + value);
-  });
+        result.push(key + "=" + value);
+    });
 
-  return result.join('&');
+    return result.join('&');
 };
 
-RestClient.prototype.generateSignature = function(action, data){
-  var tstamp = new Date().getTime();
-  var startingData = {
-    "_": tstamp,
-    "_ackey": this.key,
-    "_acsec": this.secret,
-    "_action": action
-  };
+RestClient.prototype.generateSignature = function(action, data) {
+    var tstamp = new Date().getTime();
+    var startingData = {
+        "_": tstamp,
+        "_ackey": this.key,
+        "_acsec": this.secret,
+        "_action": action
+    };
 
-  var allData = Object.assign(startingData, data);
-  var paramsString = this.objectToString(allData, false);
-  debug("sign base: %s", paramsString);
+    var allData = Object.assign(startingData, data);
+    var paramsString = this.objectToString(allData, false);
+    debug("sign base: %s", paramsString);
 
-  var hash = createHash("sha256").update(paramsString).digest().toString("base64");
-  var sig  = this.key + "." + tstamp.toString() + "." + hash;
-  debug("signature: %s", sig);
-  return sig;
+    var hash = createHash("sha256").update(paramsString).digest().toString("base64");
+    var sig = this.key + "." + tstamp.toString() + "." + hash;
+    debug("signature: %s", sig);
+    return sig;
 };
 
 RestClient.prototype.request = function(action, data, callback) {
-  var args = {
-    requestConfig: {
-      noDelay: true,
-      keepAlive: false
-    },
-    headers: {}
-  };
-  var actionFunction;
+    var args = {
+        requestConfig: {
+            noDelay: true,
+            keepAlive: false
+        },
+        headers: {}
+    };
+    var actionFunction;
 
-  if (action.startsWith("/api/v2/private/") || action.startsWith("/api/v1/private/")) {
-    if (this.key == null || this.secret == null) {
-      throw new Error("key or secret empty");
+    if (action.startsWith("/api/v2/private/") || action.startsWith("/api/v1/private/")) {
+        if (this.key == null || this.secret == null) {
+            throw new Error("key or secret empty");
+        }
+
+        actionFunction = this.client.post;
+        debug("method: post");
+
+        var signature = this.generateSignature(action, data);
+        if (Object.keys(data).length > 0) {
+            args["data"] = this.objectToString(data, true);
+        }
+
+        args["headers"]["x-deribit-sig"] = signature;
+    } else {
+        actionFunction = this.client.get;
+        debug("method: get");
+
+        if (Object.keys(data).length > 0) {
+            args["parameters"] = data;
+        }
     }
-    
-    actionFunction = this.client.post;
-    debug("method: post");
+    if (typeof(callback) != "function") {
+        var deferred = Q.defer();
+        actionFunction(this.url + action, args, function(data, response) {
+            if (response.headers['content-type'] != "application/json") {
+                debug("invalid response content-type %s", response.headers['content-type']);
+                deferred.reject("wrong response type");
+                return;
+            }
+            debug("response: %o", data);
+            deferred.resolve(data);
+        }).on('error', (err) => {
+            debug("error: %o", err);
+            deferred.reject(err);
+        }).on('requestTimeout', (req) => {
+            debug("request timeout");
+            deferred.reject('requestTimeout');
+            req.abort();
+        }).on('responseTimeout', () => {
+            debug("response timeout");
+            deferred.reject('responseTimeout');
+        });
 
-    var signature = this.generateSignature(action, data);
-    if (Object.keys(data).length > 0) {
-      args["data"] = this.objectToString(data, true);
+        return deferred.promise;
+    } else {
+        actionFunction(this.url + action, args, function(result, response) {
+            if (response.headers['content-type'] != "application/json") {
+                debug("invalid response content-type %s", response.headers['content-type']);
+                callback(null, "wrong response type");
+                return;
+            }
+            debug("response: %o", data);
+            callback(result);
+        }).on('error', function(err) {
+            debug("error: %o", err);
+            callback(null, err);
+        });
     }
 
-    args["headers"]["x-deribit-sig"] = signature;
-  } else {
-    actionFunction = this.client.get;
-    debug("method: get");
-
-    if (Object.keys(data).length > 0) {
-      args["parameters"] = data;
-    }
-  }
-  if (typeof(callback) != "function") {
-    var deferred = Q.defer();
-    actionFunction(this.url + action, args, function (data, response){
-      if (response.headers['content-type'] != "application/json") {
-        debug("invalid response content-type %s", response.headers['content-type']);
-        deferred.reject("wrong response type");
-        return;
-      }
-      debug("response: %o", data);
-      deferred.resolve(data);
-    }).on('error', (err) => {
-      debug("error: %o", err);
-      deferred.reject(err);
-    }).on('requestTimeout', (req) => {
-      debug("request timeout");
-      deferred.reject('requestTimeout');
-      req.abort();
-    }).on('responseTimeout', () => {
-      debug("response timeout");
-      deferred.reject('responseTimeout');
-    });
-
-    return deferred.promise;
-  } else {
-    actionFunction(this.url + action, args, function(result, response) {
-      if (response.headers['content-type'] != "application/json") {
-        debug("invalid response content-type %s", response.headers['content-type']);
-        callback(null, "wrong response type");
-        return;
-      }
-      debug("response: %o", data);
-      callback(result);
-    }).on('error', function(err) {
-      debug("error: %o", err);
-      callback(null, err);
-    });
-  }
-  
 };
 
 // RestClient.prototype.getorderbook = function(instrument, callback) {
@@ -39460,52 +39460,56 @@ RestClient.prototype.request = function(action, data, callback) {
 // };
 
 RestClient.prototype.getsummary = function(currency, callback) { // doesnt work
-  return this.request("/api/v2/private/get_account_summary",{currency: currency, extended: 'true'}, callback);
+    return this.request("/api/v2/private/get_account_summary", { currency: currency, extended: 'true' }, callback);
 };
 
 RestClient.prototype.lastTrade = function(callback) {
-  return this.request("/api/v2/public/get_last_trades_by_instrument", {instrument_name: 'BTC-PERPETUAL', count: 2}, callback);
+    return this.request("/api/v2/public/get_last_trades_by_instrument", { instrument_name: 'BTC-PERPETUAL', count: 2 }, callback);
 };
 
 RestClient.prototype.account = function(callback) {
-  return this.request("/api/v2/private/get_account_summary", {}, callback);
+    return this.request("/api/v2/private/get_account_summary", {}, callback);
 };
 
-RestClient.prototype.candle = function(resolution, start_timestamp, end_timestamp,callback) {
-  return this.request("/api/v2/public/get_tradingview_chart_data", {instrument_name: 'BTC-PERPETUAL',resolution: resolution, start_timestamp: start_timestamp, end_timestamp: end_timestamp}, callback);
+RestClient.prototype.candle = function(resolution, start_timestamp, end_timestamp, callback) {
+    return this.request("/api/v2/public/get_tradingview_chart_data", { instrument_name: 'BTC-PERPETUAL', resolution: resolution, start_timestamp: start_timestamp, end_timestamp: end_timestamp }, callback);
+};
+
+RestClient.prototype.candleeth = function(resolution, start_timestamp, end_timestamp, callback) {
+    return this.request("/api/v2/public/get_tradingview_chart_data", { instrument_name: 'ETH-PERPETUAL', resolution: resolution, start_timestamp: start_timestamp, end_timestamp: end_timestamp }, callback);
 };
 
 RestClient.prototype.buy = function(instrument, quantity, price, postOnly, label, callback) {
-  var options = {
-    "instrument": instrument,
-    "quantity": quantity,
-    "price": price
-  };
+    var options = {
+        "instrument": instrument,
+        "quantity": quantity,
+        "price": price
+    };
 
-  if ( label !== undefined) { options["label"] = label; }
-  if ( postOnly !== undefined) { options["postOnly"] = postOnly; }
-  return this.request("/api/v1/private/buy", options, callback);
+    if (label !== undefined) { options["label"] = label; }
+    if (postOnly !== undefined) { options["postOnly"] = postOnly; }
+    return this.request("/api/v1/private/buy", options, callback);
 };
 
 RestClient.prototype.sell = function(instrument, quantity, price, postOnly, label, callback) {
-  var options = {
-    "instrument": instrument,
-    "quantity": quantity,
-    "price": price
-  };
+    var options = {
+        "instrument": instrument,
+        "quantity": quantity,
+        "price": price
+    };
 
-  if ( label !== undefined) { options["label"] = label; }
-  if ( postOnly !== undefined) { options["postOnly"] = postOnly; }
+    if (label !== undefined) { options["label"] = label; }
+    if (postOnly !== undefined) { options["postOnly"] = postOnly; }
 
-  return this.request("/api/v1/private/sell", options, callback);
+    return this.request("/api/v1/private/sell", options, callback);
 };
 
 RestClient.prototype.cancel = function(orderId, callback) {
-  var options = {
-    orderId: orderId
-  };
+    var options = {
+        orderId: orderId
+    };
 
-  return this.request("/api/v1/private/cancel", options, callback);
+    return this.request("/api/v1/private/cancel", options, callback);
 };
 
 // RestClient.prototype.cancelall = function(callback) {
@@ -39513,9 +39517,9 @@ RestClient.prototype.cancel = function(orderId, callback) {
 // };
 
 RestClient.prototype.cancelall = function(type, callback) {
-  if (type === undefined) {type = "all"};
-  
-  return this.request("/api/v1/private/cancelall", {type: 'all', currenct: 'BTC'}, callback);
+    if (type === undefined) { type = "all" };
+
+    return this.request("/api/v1/private/cancelall", { type: 'all', currenct: 'BTC' }, callback);
 };
 // RestClient.prototype.edit = function(orderId, quantity, price, callback) {
 //   var options = {
@@ -39528,41 +39532,40 @@ RestClient.prototype.cancelall = function(type, callback) {
 // };
 
 RestClient.prototype.getopenorders = function(instrument, orderId, callback) {
-  var options = {};
+    var options = {};
 
-  if (instrument !== undefined ) { options["instrument"] = instrument };
-  //if (orderId    !== undefined ) { options["orderId"] = orderId};
+    if (instrument !== undefined) { options["instrument"] = instrument };
+    //if (orderId    !== undefined ) { options["orderId"] = orderId};
 
-  return this.request("/api/v1/private/getopenorders", options, callback);
+    return this.request("/api/v1/private/getopenorders", options, callback);
 };
 
 RestClient.prototype.positions = function(callback) {
-  return this.request("/api/v1/private/positions", {}, callback);
+    return this.request("/api/v1/private/positions", {}, callback);
 };
 
 RestClient.prototype.orderhistory = function(count, callback) {
-  var options = {};
-  if (count    !== undefined ) { options["count"] = count};
-  return this.request("/api/v1/private/orderhistory", options, callback);
+    var options = {};
+    if (count !== undefined) { options["count"] = count };
+    return this.request("/api/v1/private/orderhistory", options, callback);
 };
 
 RestClient.prototype.tradehistory = function(count, instrument, startTradeId, callback) {
-  if (instrument === undefined ) { instrument = "all"};
-  var options = {
-    instrument: instrument
-  };
-  if (count !== undefined ) { options["count"] = count};
-  if (startTradeId !== undefined ) { options["startTradeId"] = startTradeId}
-  return this.request("/api/v1/private/tradehistory", options, callback);
+    if (instrument === undefined) { instrument = "all" };
+    var options = {
+        instrument: instrument
+    };
+    if (count !== undefined) { options["count"] = count };
+    if (startTradeId !== undefined) { options["startTradeId"] = startTradeId }
+    return this.request("/api/v1/private/tradehistory", options, callback);
 };
 
 module.exports = RestClient;
-
 },{"create-hash":319,"debug":320,"http":227,"https":150,"node-rest-client":399,"q":409,"url":248}],257:[function(require,module,exports){
  //CHART
  var chart = LightweightCharts.createChart(document.getElementById('chart'), {
-     width: 1300,
-     height: 775,
+     width: 1000,
+     height: 850,
      layout: {
          backgroundColor: 'black',
          textColor: 'white',
@@ -39608,7 +39611,7 @@ module.exports = RestClient;
      watermark: {
          color: '#CDCDCE',
          visible: true,
-         text: 'WebAlpha',
+         text: 'WebAlpha - BTC-PERPETUAL',
          fontSize: 22,
          horzAlign: 'left',
          vertAlign: 'bottom',
@@ -39667,6 +39670,101 @@ module.exports = RestClient;
  }
  setInterval(CallData, 1000)
  CallData()
+
+
+ //CHART
+ var charteth = LightweightCharts.createChart(document.getElementById('charteth'), {
+     width: 1000,
+     height: 790,
+     layout: {
+         backgroundColor: 'black',
+         textColor: 'white',
+         fontSize: 16,
+         fontfamily: "sans-serif",
+     },
+     grid: {
+         vertLines: {
+             color: '#363C4E',
+             style: 1,
+             visible: false,
+
+         },
+         horzLines: {
+             color: '#363C4E',
+             style: 1,
+             visible: false,
+         },
+     },
+     crosshair: {
+         visible: false,
+     },
+     priceScale: {
+         autoScale: true,
+     },
+     timeScale: {
+         autoScale: true,
+         timeVisible: true,
+         secondsVisible: false,
+     },
+     handleScroll: {
+         mouseWheel: true,
+         pressedMouseMove: true,
+     },
+     handleScale: {
+         axisPressedMouseMove: true,
+         mouseWheel: true,
+         pinch: true,
+     },
+ });
+
+ charteth.applyOptions({
+     watermark: {
+         color: '#CDCDCE',
+         visible: true,
+         text: 'WebAlpha - ETH-PERPERTUAL',
+         fontSize: 22,
+         horzAlign: 'left',
+         vertAlign: 'bottom',
+     },
+ });
+
+ charteth.timeScale().fitContent();
+ var candleSerieseth = charteth.addCandlestickSeries({
+     upColor: '#1de9b6',
+     downColor: '#FF6347',
+     borderVisible: false,
+     wickVisible: true,
+     borderColor: '#000000',
+     wickColor: '#1de9b6',
+     borderUpColor: '#1de9b6',
+     borderDownColor: '#A52A2A',
+     wickUpColor: "#1de9b6",
+     wickDownColor: "#A52A2A",
+ });
+
+
+
+ //PRICE LINES
+
+ function CallDataeth() {
+     restClient.candleeth(1, (new Date()).getTime() - 43200000, (new Date()).getTime(), (d) => {
+
+
+         //console.log(d)
+         var response = d.result
+         var data = []
+             //console.log(response)
+         for (var i = 0; i < response.volume.length; i++) {
+             //console.log(i)
+             //console.log(response.open[i])
+             data.push({ time: response.ticks[i] / 1000, open: response.open[i], high: response.high[i], low: response.low[i], close: response.close[i] })
+         }
+         //console.log(data)
+         candleSerieseth.setData(data);
+     })
+ }
+ setInterval(CallDataeth, 1000)
+ CallDataeth()
 
 
  //  binance.futuresCandles("BTCUSDT", "1m").then(response => {
