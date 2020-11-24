@@ -75,43 +75,44 @@ socket.addEventListener('message', function(event) {
 });
 
 
-let msgFTX = {
-    "op": "subscribe",
-    "channel": "ticker",
-    "market": "BTC-PERP"
-}
+// let msgFTX = {
+//     "op": "subscribe",
+//     "channel": "ticker",
+//     "market": "BTC-PERP"
+// }
 
 
-const wsFTX = new WebSocket('wss://ftx.com/ws/')
+// const wsFTX = new WebSocket('wss://ftx.com/ws/')
 
-wsFTX.onmessage = function(a) {
-    response1 = JSON.parse(a.data)
+// wsFTX.onmessage = function(a) {
+//     response1 = JSON.parse(a.data)
+//     try {
+//         exchangeObject.FTX.bestBid = Number(response1.data.bid)
+//         exchangeObject.FTX.bestAsk = Number(response1.data.ask)
+//         exchangeObject.FTX.bestBidSize = Number(response1.data.bidSize)
+//         exchangeObject.FTX.bestAskSize = Number(response1.data.askSize)
+//     } catch (error) {}
 
-    exchangeObject.FTX.bestBid = Number(response1.data.bid)
-    exchangeObject.FTX.bestAsk = Number(response1.data.ask)
-    exchangeObject.FTX.bestBidSize = Number(response1.data.bidSize)
-    exchangeObject.FTX.bestAskSize = Number(response1.data.askSize)
+// }
+// wsFTX.onopen = function() {
+//     wsFTX.send(JSON.stringify(msgFTX));
+// };
 
 
-}
-wsFTX.onopen = function() {
-    wsFTX.send(JSON.stringify(msgFTX));
-};
+// //LIQUIDITY SCANNER
+// function liquidityScanner() {
+//     for (var x in exchangeObject) {
+//         var ask = exchangeObject[x].bestAskSize
+//         for (var y in exchangeObject) {
+//             var bid = exchangeObject[y].bestBidSize
+//             var liquidity = Math.min(bid, ask)
+//             if (x != y) { liquidityObject[x + '-' + y] = liquidity.toFixed(3) }
 
-//LIQUIDITY SCANNER
-function liquidityScanner() {
-    for (var x in exchangeObject) {
-        var ask = exchangeObject[x].bestAskSize
-        for (var y in exchangeObject) {
-            var bid = exchangeObject[y].bestBidSize
-            var liquidity = Math.min(bid, ask)
-            if (x != y) { liquidityObject[x + '-' + y] = liquidity.toFixed(3) }
-
-        }
-        //console.log(liquidityObject)
-    }
-}
-setInterval(liquidityScanner, 1000)
+//         }
+//         //console.log(liquidityObject)
+//     }
+// }
+// setInterval(liquidityScanner, 1000)
 
 //SPREAD CALCULATOR          
 function calculateSpreads() {
@@ -131,19 +132,13 @@ function calculateSpreads() {
             zValues = [
 
                     [null,
-                        spreadObject["Deribit-FTX"],
                         spreadObject["Deribit-Binance"],
                     ],
 
                     [
                         spreadObject["Binance-Deribit"],
                         null,
-                        spreadObject["Binance-FTX"],
-                    ],
-                    [
-                        spreadObject["FTX-Binance"],
-                        spreadObject["FTX-Deribit"],
-                        null,
+
                     ],
                 ],
 
@@ -212,6 +207,7 @@ function calculateSpreads() {
                             color: 'white'
                         },
                         showarrow: true,
+                        arrowcolor: "black",
                         font: {
                             color: textColor
                         }

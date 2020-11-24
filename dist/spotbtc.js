@@ -39286,655 +39286,6 @@ function extend() {
 }
 
 },{}],256:[function(require,module,exports){
-var _ = require('lodash')
-var $ = require('jquery')
-
-const path = require('path')
-
-
-var limits = {}
-
-var ping
-
-
-const Notiflix = require('notiflix')
-
-notify()
-
-function notify() {
-    Notiflix.Report.Info('Welcome', 'WebAlpha is currently under construction! :)', 'Enter');
-    Notiflix.Notify.Success('Pricing Server Connected');
-}
-
-
-var Client = require('node-rest-client').Client;
-var client = new Client();
-
-var orderbook = {
-    bids: {},
-    asks: {}
-}
-var updates = 0
-var lastUpdateId
-
-var distance = 10000
-var consolidation = 2
-var sizeThreshold = 50
-class SocketClient {
-    constructor(path, baseUrl) {
-        this.baseUrl = baseUrl || 'wss://stream.binance.com/';
-        this._path = path;
-        this._createSocket();
-        this._handlers = new Map();
-    }
-
-    _createSocket() {
-        console.log(`${this.baseUrl}${this._path}`);
-
-        // // Create WebSocket connection.
-        // const socket = new WebSocket('ws://localhost:8080');
-
-        // // Connection opened
-        // socket.addEventListener('open', function(event) {
-        //     socket.send('Hello Server!');
-        // });
-
-        // // Listen for messages
-        // socket.addEventListener('message', function(event) {
-        //     console.log('Message from server ', event.data);
-        // });
-
-
-        this._ws = new WebSocket(`${this.baseUrl}${this._path}`);
-
-        this._ws.onopen = () => {
-            console.log('Binance ws connected');
-        };
-
-        // this.addEventListener.on('pong', () => {
-        //     // console.log('receieved pong from server');
-        // });
-        // this._ws.on('ping', () => {
-        //     //console.log('==========receieved ping from server');
-        //     this._ws.pong();
-        // });
-
-        // this._ws.onclose = () => {
-        //     console.log('ws closed');
-        // };
-
-        // this._ws.onerror = (err) => {
-        //     console.log('ws error', err);
-        // };
-
-        this._ws.onmessage = (msg) => {
-            try {
-                const message = JSON.parse(msg.data);
-                //console.log(message)
-                //check for orderbook, if empty retrieve snapshot
-                if (Object.keys(orderbook.bids).length == 0) {
-                    // @ts-ignore
-                    client.get('https://fapi.binance.com/fapi/v1/depth?symbol=BTCUSDT&limit=100',
-                        function(data) {
-
-                            for (var i in data.bids) {
-                                var price = String(data.bids[i][0])
-                                var qty = Number(data.bids[i][1])
-                                orderbook.bids[price] = qty
-                            }
-                            for (var j in data.asks) {
-                                var price = String(data.asks[j][0])
-                                var qty = Number(data.asks[j][1])
-                                orderbook.asks[price] = qty
-                            }
-                            orderbook.lastUpdateId = data.lastUpdateId
-                            console.log(data)
-                        })
-                }
-
-                //get lastUpdateId
-                else {
-                    //console.log(orderbook)
-                    lastUpdateId = Number(orderbook.lastUpdateId)
-                        //console.log(message.U, message.u, lastUpdateId)
-                        //console.log(message.u)
-                    if (updates == 0) {
-                        if (message.U <= lastUpdateId && message.u >= lastUpdateId) {
-                            updates++
-                            //console.log('process this update')
-                            orderbook.lastUpdateId = message.u
-                            processUpdates(message)
-
-                        } else {
-                            console.log('discard this update', (message.U <= lastUpdateId), (message.u >=
-                                lastUpdateId))
-                            orderbook.lastUpdateId = message.u
-                        }
-                    } else if (message.pu == lastUpdateId) {
-                        //console.log('process this update')
-                        orderbook.lastUpdateId = message.u
-                        processUpdates(message)
-                    } else {
-                        console.log('Out of sync, abort')
-                        orderbook.lastUpdateId = message.u
-                    }
-                }
-            } catch (error) {
-                console.log(error)
-            }
-        };
-
-        this.heartBeat();
-    }
-
-    heartBeat() {
-        setInterval(() => {
-            if (this._ws.readyState === WebSocket.OPEN) {
-                // this._ws.ping();
-                //console.log("ping server");
-            }
-        }, 60000);
-    }
-
-    setHandler(method, callback) {
-        if (!this._handlers.has(method)) {
-            this._handlers.set(method, []);
-        }
-        this._handlers.get(method).push(callback);
-    }
-}
-
-async function processUpdates(data) {
-    for (var update in data['b']) {
-        manageOrderbook('bids', data['b'][update])
-    }
-    for (var update in data['a']) {
-        manageOrderbook('asks', data['a'][update])
-    }
-    updateTable(orderbook)
-
-}
-
-async function manageOrderbook(side, update) {
-    var price = String(update[0])
-    var qty = Number(update[1])
-        //console.log(price, qty)
-    if (qty == 0) {
-        delete orderbook[side][price]
-    } else {
-        orderbook[side][price] = qty
-    }
-}
-
-//Mapping
-var centrePrice = 0
-var renderDistance = 25
-
-function truncateObject(obj, num) {
-    var newObj = {}
-    var log = Object.entries(obj)
-    for (var j in log.slice(0, num)) {
-        newObj[log[j][0]] = log[j][1]
-    }
-    return newObj
-}
-
-function buildMap(obj) {
-    let map = new Map();
-    Object.keys(obj).forEach(key => {
-        map.set(key, obj[key]);
-    });
-    return map;
-}
-
-function truncateBidMap(map, num) {
-    var arrayTmp = Array.from(map).reverse().slice(0, num)
-    var newMap = new Map(arrayTmp)
-    return newMap
-}
-
-function truncateAskMap(map, num) {
-    var arrayTmp = Array.from(map).slice(0, num)
-    var newMap = new Map(arrayTmp)
-    return newMap
-}
-
-async function updateTable(orderbook) {
-    // FORMAT HTML TABLE
-    // CONSOLIDATE PRICES
-    var consolidatedBids = {}
-    var consolidatedAsks = {}
-
-    for (var j in orderbook.bids) {
-        price = Number(j)
-        consolidatedPrice = consolidate(price)
-        qty = Number(orderbook.bids[j])
-            //console.log(price, qty)
-        if (consolidatedPrice in consolidatedBids) {
-            consolidatedBids[consolidatedPrice] += qty
-        } else {
-            consolidatedBids[consolidatedPrice] = qty
-        }
-    }
-    for (var j in orderbook.asks) {
-        price = Number(j)
-        consolidatedPrice = consolidate(price)
-        qty = Number(orderbook.asks[j])
-
-        if (consolidatedPrice in consolidatedAsks) {
-            consolidatedAsks[consolidatedPrice] += qty
-        } else {
-            consolidatedAsks[consolidatedPrice] = qty
-        }
-    }
-
-    const mapbid = buildMap(consolidatedBids)
-    var bidMap = truncateBidMap(mapbid, renderDistance)
-
-    const askbid = buildMap(consolidatedAsks)
-    var askMap = truncateAskMap(askbid, renderDistance)
-
-
-    let html = `<table>`
-    html +=
-        `<tr><th colspan="1">DOM</th><th colspan="1">Bids</th><th colspan="1">BTCUSDT</th><th colspan="1">Asks</th><th colspan="1">T: ${numberTrades}</th></tr>`
-    for (var i = centrePrice + 100; i > centrePrice - 100; i -= consolidation) {
-        if (consolidate(lastPrice.price) == i) {
-            var directionColour = lastPrice.direction ? "#D23830" : "#0F969E"
-            if (i in consolidatedBids) {
-                // BEST BID
-                html += `<tr>
-                        <td>
-                        <div class="meterBids">
-                        <span style="width: ${consolidatedBids[i]}%"></span>
-                        </div>
-                        </td>`
-
-
-                if (bidMap.get(String(i)).toFixed(3) > sizeThreshold) {
-                    html +=
-                        `<td style="background-color:gold;" class=bestBidCol2 onclick="BinanceFBuy(${i})">${bidMap.get(String(i)).toFixed(3)}</td>`
-
-
-                } else {
-                    html +=
-                        `<td class=bestBidCol2 onclick="BinanceFBuy(${i})">${bidMap.get(String(i)).toFixed(3)}</td>`
-                }
-
-                if (BinanceEntryPrice === i) {
-                    html += `<td style="background-color: blue; color: white;">${i + " " + PNLP1}</td>`
-                } else {
-                    html += `<td class=bestBidCol3>${i}</td>`
-                }
-
-                html += `<td class=bestBidCol4 onclick="BinanceFSell(${i})"></td>`
-                html +=
-                    `<td id="centerPrice" style="background-color:${directionColour}; color:white;">${lastPrice.qty}</td>`
-
-            } else if (i in consolidatedAsks) {
-                html += `<tr>
-            <td>
-            <div class="meterAsks">
-              <span style="width: ${consolidatedAsks[i]}%"></span>
-            </div>
-            </td>`
-
-                html += `<td class=bestAskCol2 onclick="BinanceFBuy(${i})"></td>`
-                if (BinanceEntryPrice === i) {
-                    html += `<td style="background-color: blue; color: white;">${i + " " + PNLP1}</td>`
-                } else {
-                    html += `<td class=bestAskCol3>${i}</td>`
-                }
-                html +=
-                    `<td class=askCol4 onclick="BinanceFSell(${i})">${askMap.get(String(i)).toFixed(3)}</td>`
-                html +=
-                    `<td id="centerPrice" style="background-color:${directionColour}; color:white;">${lastPrice.qty}</td>`
-            } else {
-                // No bids/asks
-                html += `<tr>
-            <td></td>
-            <td></td>
-            <td class=bestNBACol2></td>
-            <td class=bestNBACol3">${i}</td>
-            <td class=bestNBACol4></td>
-            <td></td>
-            </tr>`
-            }
-        } else {
-            if (i in consolidatedBids && volumeProfileObject && bidMap.has(String(i))) {
-                // BIDS
-                //console.log(i)
-                html += `<tr>
-            <td>
-            <div class="meterBids">
-              <span style="width: ${consolidatedBids[i]}%;"></span>
-            </div>
-            </td>`
-
-
-                if (bidMap.get(String(i)).toFixed(3) > sizeThreshold) {
-                    html +=
-                        `<td style="background-color:gold;" onclick="BinanceFBuy(${i})">${bidMap.get(String(i)).toFixed(3)}</td>`
-
-
-                } else {
-                    html +=
-                        `<td class=bidCol2 onclick="BinanceFBuy(${i})">${bidMap.get(String(i)).toFixed(3)}</td>`
-                }
-
-
-                if (parseInt((candleData.low / consolidation) * consolidation) === i) {
-                    html +=
-                        `<td style="background-color: purple; color: white; outline: 2px dashed blue;">${i}(L)</td>`
-                } else if (BinanceEntryPrice === i && Amount > 0) {
-                    html += `<td style="background-color: blue; color: white;">${i + " " + PNLP1}</td>`
-                } else if (BinanceEntryPrice === i && Amount < 0) {
-                    html += `<td style="background-color: red; color: white;">${i + " " + PNLP1}</td>`
-                } else {
-                    html += `<td class=bidCol3>${i}</td>`
-                }
-
-                html += `<td class=bidCol4 onclick="BinanceFSell(${i})"></td>
-            <td>                
-            <div class="meterAccBids">`
-                if (volumeProfileObject[i] > 0) {
-                    html += `<span class=bestBidCol5 style="width: ${volumeProfileObject[i]}%;"></span>`
-                } else {
-                    `<span style="width: 0%"></span>`
-                }
-                html += `</div>
-                  </td>
-                  </tr>`
-
-            } else if (i in consolidatedAsks && volumeProfileObject && askMap.has(String(i))) {
-                // ASKS
-
-                html += `<tr>
-            <td>
-            <div class="meterAsks">
-              <span style="width: ${consolidatedAsks[i]}%; border-left: 0px; border-right: 0px;"></span>
-            </div>
-            </td>`
-
-
-
-                html += `<td class=askCol2 onclick="BinanceFBuy(${i})"></td>`
-
-                if (parseInt((candleData.high / consolidation) * consolidation) === i) {
-                    html +=
-                        `<td style="background-color: purple; color: white; outline: 2px dashed blue;">${i}(H)</td>`
-                } else if (BinanceEntryPrice === i && Amount > 0) {
-                    html += `<td style="background-color: blue; color: white;">${i + " " + PNLP1}</td>`
-                } else if (BinanceEntryPrice === i && Amount < 0) {
-                    html += `<td style="background-color: red; color: white;">${i + " " + PNLP1}</td>`
-                } else {
-                    html += `<td class=bidCol3>${i}</td>`
-                }
-
-                if (askMap.get(String(i)).toFixed(3) > sizeThreshold) {
-                    html +=
-                        `<td style="background-color:gold;" onclick="BinanceFSell(${i})">${askMap.get(String(i)).toFixed(3)}</td>`
-                } else {
-                    html +=
-                        `<td class=askCol4 onclick="BinanceFSell(${i})">${askMap.get(String(i)).toFixed(3)}</td>`
-                }
-                html += `<td><div class="meterAccBids">`
-                if (volumeProfileObject[i] > 0) {
-                    html += `<span class=askCol5 style="width: ${volumeProfileObject[i]}%;"></span>`
-                } else {
-                    `<span style="width: 0%"></span>`
-                }
-                html += `</div>
-                  </td>
-                  </tr>`
-
-            } else {
-                // No bids/asks
-                html += `<tr>
-            <td></td>`
-
-
-
-                html += `<td class=askCol2 onclick="BinanceFBuy(${i})"></td>`
-                if (parseInt(candleData.high / consolidation) * consolidation === i) {
-                    html +=
-                        `<td style="background-color: purple; color: white; outline: 2px dashed blue;">${i}(H)</td>`
-                } else if (parseInt(candleData.low / consolidation) * consolidation === i) {
-                    html +=
-                        `<td style="background-color: purple; color: white; outline: 2px dashed blue;">${i}(L)</td>`
-                } else if (BinanceEntryPrice === i && Amount > 0) {
-                    html += `<td style="background-color: blue; color: white;">${i + " " + PNLP1}</td>`
-                } else if (BinanceEntryPrice === i && Amount < 0) {
-                    html += `<td style="background-color: red; color: white;">${i + " " + PNLP1}</td>`
-                } else {
-                    html += `<td class=bidCol3>${i}</td>`
-                }
-
-                html += `<td class=NBACol4 onclick="BinanceFSell(${i})"></td>
-            <td></td>
-            </tr>`
-            }
-        }
-    }
-    html += '</table>'
-        //console.log(html)
-    document.getElementById("GUI").innerHTML = html;
-}
-// document.getElementById("headerAccBids").innerHTML = sum(consolidatedBids).toFixed(0);
-// document.getElementById("headerAccAsks").innerHTML = sum(consolidatedAsks).toFixed(0);
-
-// ping = Number(Date.now())-Number(candleData.time)
-// //console.log(ping)
-// document.getElementById("ping").innerHTML = ping+"ms";
-
-
-
-// function sum(obj) {
-//     var sum = 0;
-//     for (var el in obj) {
-//       if (obj.hasOwnProperty(el)) {
-//         sum += parseFloat(obj[el]);
-//       }
-//     }
-//     return sum;
-//   }
-
-// function sendStats() {
-
-//     console.log(localStorage.APIKEYSTORAGE)
-
-//     //SEND HEADER STATS
-//     // document.getElementById("headerLastPrice").innerHTML = lastPrice.price;
-//     // document.getElementById("headerOpen").innerHTML = candleData.open;
-//     document.getElementById("headerHigh").innerHTML = candleData.high;
-//     document.getElementById("headerLow").innerHTML = candleData.low;
-//     document.getElementById("headerVolume").innerHTML = candleData.vol;
-//     // document.getElementById("timeLeft").innerHTML = timeleft;
-
-//     if (percentageChange > 0) {
-//         document.getElementById("headerPercentageChange").innerHTML = percentageChange + "% " + pointChange;
-//         document.getElementById("headerPercentageChange").style.color = "limegreen"
-//     } else {
-//         document.getElementById("headerPercentageChange").innerHTML = percentageChange + "% " + pointChange;
-//         document.getElementById("headerPercentageChange").style.color = "#D23830"
-//     }
-
-//     if (Amount < 0) {
-//         document.getElementById("posSize").style.color = "red"
-//     } else if (Amount > 0) {
-//         document.getElementById("posSize").style.color = "blue"
-//     } else if (Amount === 0.000) {
-//         document.getElementById("posSize").style.color = "black"
-//     }
-//     document.getElementById('posSize').value = Amount;
-//     document.getElementById('balance').innerHTML = Number(wallet).toFixed(2);
-//     document.getElementById('bnb').innerHTML = Number(bnb).toFixed(2);
-//     document.getElementById('urpl').innerHTML = Number(urpl).toFixed(2);
-//     document.getElementById('urwb').innerHTML = Number(wallet + urpl).toFixed(2);
-// }
-// setInterval(sendStats, 500)
-
-function consolidate(price) {
-    return parseInt(price / consolidation) * consolidation
-}
-
-const Binance = require('node-binance-api');
-const binance = new Binance().options({
-    APIKEY: `2X6NwCa2uto2YSX0WSCKX1Xiyu2DzwzRd0AWA2M3YSyCHTVNAtDWearxekW7Eflt`,
-    // APIKEY: localStorage.APIKEYSTORAGE,
-    APISECRET: `A7O6GaCv2YhNNveoOpgrN5kpFVyPpNyLMuRrDAxKb0IfAlpIugiDq7eG6XDZhJxM`
-        // APISECRET: localStorage.APISECRETSTORAGE
-});
-
-const socketApi = new SocketClient(`ws/btcusdt@depth@100ms`, 'wss://fstream3.binance.com/');
-
-BinanceEntryPrice = 10000
-
-// async function getBinancePositionStats() {
-
-//     async function asyncCall() {
-//         var response = (await binance.futuresPositionRisk());
-//         const result = await resolveAfter2Seconds();
-//         console.log(response.BTCUSDT)
-//         Amount = response.BTCUSDT.positionAmt
-//         Entry = (response.BTCUSDT.entryPrice)
-//         BinanceEntryPrice = parseInt(Entry / consolidation) * consolidation
-//         MarkPrice = Number(response.BTCUSDT.markPrice)
-//         PNLP1 = Number(MarkPrice - BinanceEntryPrice).toFixed(1)
-//         urpl = Number(response.BTCUSDT.unRealizedProfit)
-//     }
-//     asyncCall(); //
-//     async function resolveAfter2Seconds() {
-//         return new Promise(resolve => {
-//             setTimeout(() => {
-//                 resolve('Complete!');
-//             }, 0);
-//         });
-//     }
-// }
-// setInterval(getBinancePositionStats, 1000)
-
-
-
-//WEBSOCKETS
-
-// Create WebSocket connection.
-const socket = new WebSocket('wss://fstream.binance.com/ws/btcusdt@trade');
-// Connection opened
-socket.addEventListener('open', function(event) {
-    socket.send('Hello Server!');
-});
-
-
-// Listen for messages
-var lastPrice = {}
-socket.addEventListener('message', function(event) {
-
-    const trade = JSON.parse(event.data);
-    lastPrice = {
-        price: trade.p,
-        qty: trade.q,
-        direction: trade.m
-    }
-});
-
-
-// Create WebSocket connection.
-const socket1 = new WebSocket('wss://fstream.binance.com/ws/btcusdt@miniTicker');
-// Connection opened
-socket1.addEventListener('open', function(event) {
-    socket1.send('Hello Server!');
-});
-
-var candleData = {}
-socket1.addEventListener('message', function(event) {
-
-    const miniTicker = JSON.parse(event.data);
-    //console.log(miniTicker)
-    candleData = {
-        open: miniTicker.o,
-        high: miniTicker.h,
-        low: Number(miniTicker.l),
-        vol: miniTicker.v,
-        time: miniTicker.E
-    }
-});
-
-
-var percentageChange
-var pointChange
-var numberTrades
-    // Create WebSocket connection.
-const socket2 = new WebSocket('wss://fstream.binance.com/ws/btcusdt@ticker');
-// Connection opened
-socket2.addEventListener('open', function(event) {
-    socket2.send('Hello Server!');
-});
-socket2.addEventListener('message', function(event) {
-    const Ticker = JSON.parse(event.data);
-    //console.log(Ticker)
-    percentageChange = Ticker.P
-    pointChange = (Number(Ticker.p)).toFixed(0)
-    numberTrades = Ticker.n
-});
-
-
-
-
-var volumeProfileObject = {} //   prices : qty (denoted in BTC)
-var price
-var rawprice
-
-
-// Create WebSocket connection.
-const socket3 = new WebSocket('wss://fstream.binance.com/ws/btcusdt@aggTrade');
-// Connection opened
-socket3.addEventListener('open', function(event) {
-    socket3.send('Hello Server!');
-});
-
-
-
-socket3.addEventListener('message', function(event) {
-    const message = JSON.parse(event.data); // parsing single-trade record
-    //console.log(message)
-    rawprice = message.p
-    price = Math.round(Number(message.p) / consolidation) * consolidation;
-    if (volumeProfileObject[price] == undefined) {
-        volumeProfileObject[price] = Number(message.q)
-    } else {
-        volumeProfileObject[price] = (volumeProfileObject[price] + Number(message.q))
-    }
-    //console.log(volumeProfileObject)
-
-    //calculate center price
-    if (centrePrice == 0) {
-        centrePrice = price
-    }
-})
-
-
-
-function dimvalVP() {
-    for (var j in volumeProfileObject) {
-        if (volumeProfileObject[j] >= 150) {
-            for (var i in volumeProfileObject) {
-                volumeProfileObject[i] = volumeProfileObject[i] / 2
-            }
-        }
-    }
-
-}
-setInterval(dimvalVP, 500)
-
-
-
-function resetDistance() {
-    centrePrice = Math.round(Number(rawprice) / consolidation) * consolidation;
-    // Notiflix.Notify.Warning(`Recalculating Range`);
-}
-setInterval(resetDistance, distance)
-},{"jquery":367,"lodash":373,"node-binance-api":378,"node-rest-client":379,"notiflix":385,"path":180}],257:[function(require,module,exports){
 'use strict';
 require('./patch-core');
 const inherits = require('util').inherits;
@@ -40106,7 +39457,7 @@ Agent.prototype.freeSocket = function freeSocket(socket, opts) {
   socket.destroy();
 };
 
-},{"./patch-core":258,"es6-promisify":325,"events":114,"util":253}],258:[function(require,module,exports){
+},{"./patch-core":257,"es6-promisify":324,"events":114,"util":253}],257:[function(require,module,exports){
 'use strict';
 const url = require('url');
 const https = require('https');
@@ -40159,7 +39510,7 @@ https.get = function (_url, _options, cb) {
   return req;
 };
 
-},{"https":150,"url":248}],259:[function(require,module,exports){
+},{"https":150,"url":248}],258:[function(require,module,exports){
 'use strict';
 
 var compileSchema = require('./compile')
@@ -40667,7 +40018,7 @@ function setLogger(self) {
 
 function noop() {}
 
-},{"./cache":260,"./compile":264,"./compile/async":261,"./compile/error_classes":262,"./compile/formats":263,"./compile/resolve":265,"./compile/rules":266,"./compile/schema_obj":267,"./compile/util":269,"./data":270,"./keyword":298,"./refs/data.json":299,"./refs/json-schema-draft-07.json":301,"fast-json-stable-stringify":329}],260:[function(require,module,exports){
+},{"./cache":259,"./compile":263,"./compile/async":260,"./compile/error_classes":261,"./compile/formats":262,"./compile/resolve":264,"./compile/rules":265,"./compile/schema_obj":266,"./compile/util":268,"./data":269,"./keyword":297,"./refs/data.json":298,"./refs/json-schema-draft-07.json":300,"fast-json-stable-stringify":328}],259:[function(require,module,exports){
 'use strict';
 
 
@@ -40695,7 +40046,7 @@ Cache.prototype.clear = function Cache_clear() {
   this._cache = {};
 };
 
-},{}],261:[function(require,module,exports){
+},{}],260:[function(require,module,exports){
 'use strict';
 
 var MissingRefError = require('./error_classes').MissingRef;
@@ -40787,7 +40138,7 @@ function compileAsync(schema, meta, callback) {
   }
 }
 
-},{"./error_classes":262}],262:[function(require,module,exports){
+},{"./error_classes":261}],261:[function(require,module,exports){
 'use strict';
 
 var resolve = require('./resolve');
@@ -40823,7 +40174,7 @@ function errorSubclass(Subclass) {
   return Subclass;
 }
 
-},{"./resolve":265}],263:[function(require,module,exports){
+},{"./resolve":264}],262:[function(require,module,exports){
 'use strict';
 
 var util = require('./util');
@@ -40967,7 +40318,7 @@ function regex(str) {
   }
 }
 
-},{"./util":269}],264:[function(require,module,exports){
+},{"./util":268}],263:[function(require,module,exports){
 'use strict';
 
 var resolve = require('./resolve')
@@ -41356,7 +40707,7 @@ function vars(arr, statement) {
   return code;
 }
 
-},{"../dotjs/validate":297,"./error_classes":262,"./resolve":265,"./util":269,"fast-deep-equal":328,"fast-json-stable-stringify":329}],265:[function(require,module,exports){
+},{"../dotjs/validate":296,"./error_classes":261,"./resolve":264,"./util":268,"fast-deep-equal":327,"fast-json-stable-stringify":328}],264:[function(require,module,exports){
 'use strict';
 
 var URI = require('uri-js')
@@ -41628,7 +40979,7 @@ function resolveIds(schema) {
   return localRefs;
 }
 
-},{"./schema_obj":267,"./util":269,"fast-deep-equal":328,"json-schema-traverse":369,"uri-js":457}],266:[function(require,module,exports){
+},{"./schema_obj":266,"./util":268,"fast-deep-equal":327,"json-schema-traverse":368,"uri-js":456}],265:[function(require,module,exports){
 'use strict';
 
 var ruleModules = require('../dotjs')
@@ -41696,7 +41047,7 @@ module.exports = function rules() {
   return RULES;
 };
 
-},{"../dotjs":286,"./util":269}],267:[function(require,module,exports){
+},{"../dotjs":285,"./util":268}],266:[function(require,module,exports){
 'use strict';
 
 var util = require('./util');
@@ -41707,7 +41058,7 @@ function SchemaObject(obj) {
   util.copy(obj, this);
 }
 
-},{"./util":269}],268:[function(require,module,exports){
+},{"./util":268}],267:[function(require,module,exports){
 'use strict';
 
 // https://mathiasbynens.be/notes/javascript-encoding
@@ -41729,7 +41080,7 @@ module.exports = function ucs2length(str) {
   return length;
 };
 
-},{}],269:[function(require,module,exports){
+},{}],268:[function(require,module,exports){
 'use strict';
 
 
@@ -41970,7 +41321,7 @@ function unescapeJsonPointer(str) {
   return str.replace(/~1/g, '/').replace(/~0/g, '~');
 }
 
-},{"./ucs2length":268,"fast-deep-equal":328}],270:[function(require,module,exports){
+},{"./ucs2length":267,"fast-deep-equal":327}],269:[function(require,module,exports){
 'use strict';
 
 var KEYWORDS = [
@@ -42021,7 +41372,7 @@ module.exports = function (metaSchema, keywordsJsonPointers) {
   return metaSchema;
 };
 
-},{}],271:[function(require,module,exports){
+},{}],270:[function(require,module,exports){
 'use strict';
 
 var metaSchema = require('./refs/json-schema-draft-07.json');
@@ -42060,7 +41411,7 @@ module.exports = {
   }
 };
 
-},{"./refs/json-schema-draft-07.json":301}],272:[function(require,module,exports){
+},{"./refs/json-schema-draft-07.json":300}],271:[function(require,module,exports){
 'use strict';
 module.exports = function generate__limit(it, $keyword, $ruleType) {
   var out = ' ';
@@ -42225,7 +41576,7 @@ module.exports = function generate__limit(it, $keyword, $ruleType) {
   return out;
 }
 
-},{}],273:[function(require,module,exports){
+},{}],272:[function(require,module,exports){
 'use strict';
 module.exports = function generate__limitItems(it, $keyword, $ruleType) {
   var out = ' ';
@@ -42307,7 +41658,7 @@ module.exports = function generate__limitItems(it, $keyword, $ruleType) {
   return out;
 }
 
-},{}],274:[function(require,module,exports){
+},{}],273:[function(require,module,exports){
 'use strict';
 module.exports = function generate__limitLength(it, $keyword, $ruleType) {
   var out = ' ';
@@ -42394,7 +41745,7 @@ module.exports = function generate__limitLength(it, $keyword, $ruleType) {
   return out;
 }
 
-},{}],275:[function(require,module,exports){
+},{}],274:[function(require,module,exports){
 'use strict';
 module.exports = function generate__limitProperties(it, $keyword, $ruleType) {
   var out = ' ';
@@ -42476,7 +41827,7 @@ module.exports = function generate__limitProperties(it, $keyword, $ruleType) {
   return out;
 }
 
-},{}],276:[function(require,module,exports){
+},{}],275:[function(require,module,exports){
 'use strict';
 module.exports = function generate_allOf(it, $keyword, $ruleType) {
   var out = ' ';
@@ -42520,7 +41871,7 @@ module.exports = function generate_allOf(it, $keyword, $ruleType) {
   return out;
 }
 
-},{}],277:[function(require,module,exports){
+},{}],276:[function(require,module,exports){
 'use strict';
 module.exports = function generate_anyOf(it, $keyword, $ruleType) {
   var out = ' ';
@@ -42595,7 +41946,7 @@ module.exports = function generate_anyOf(it, $keyword, $ruleType) {
   return out;
 }
 
-},{}],278:[function(require,module,exports){
+},{}],277:[function(require,module,exports){
 'use strict';
 module.exports = function generate_comment(it, $keyword, $ruleType) {
   var out = ' ';
@@ -42611,7 +41962,7 @@ module.exports = function generate_comment(it, $keyword, $ruleType) {
   return out;
 }
 
-},{}],279:[function(require,module,exports){
+},{}],278:[function(require,module,exports){
 'use strict';
 module.exports = function generate_const(it, $keyword, $ruleType) {
   var out = ' ';
@@ -42669,7 +42020,7 @@ module.exports = function generate_const(it, $keyword, $ruleType) {
   return out;
 }
 
-},{}],280:[function(require,module,exports){
+},{}],279:[function(require,module,exports){
 'use strict';
 module.exports = function generate_contains(it, $keyword, $ruleType) {
   var out = ' ';
@@ -42752,7 +42103,7 @@ module.exports = function generate_contains(it, $keyword, $ruleType) {
   return out;
 }
 
-},{}],281:[function(require,module,exports){
+},{}],280:[function(require,module,exports){
 'use strict';
 module.exports = function generate_custom(it, $keyword, $ruleType) {
   var out = ' ';
@@ -42982,7 +42333,7 @@ module.exports = function generate_custom(it, $keyword, $ruleType) {
   return out;
 }
 
-},{}],282:[function(require,module,exports){
+},{}],281:[function(require,module,exports){
 'use strict';
 module.exports = function generate_dependencies(it, $keyword, $ruleType) {
   var out = ' ';
@@ -43152,7 +42503,7 @@ module.exports = function generate_dependencies(it, $keyword, $ruleType) {
   return out;
 }
 
-},{}],283:[function(require,module,exports){
+},{}],282:[function(require,module,exports){
 'use strict';
 module.exports = function generate_enum(it, $keyword, $ruleType) {
   var out = ' ';
@@ -43220,7 +42571,7 @@ module.exports = function generate_enum(it, $keyword, $ruleType) {
   return out;
 }
 
-},{}],284:[function(require,module,exports){
+},{}],283:[function(require,module,exports){
 'use strict';
 module.exports = function generate_format(it, $keyword, $ruleType) {
   var out = ' ';
@@ -43372,7 +42723,7 @@ module.exports = function generate_format(it, $keyword, $ruleType) {
   return out;
 }
 
-},{}],285:[function(require,module,exports){
+},{}],284:[function(require,module,exports){
 'use strict';
 module.exports = function generate_if(it, $keyword, $ruleType) {
   var out = ' ';
@@ -43477,7 +42828,7 @@ module.exports = function generate_if(it, $keyword, $ruleType) {
   return out;
 }
 
-},{}],286:[function(require,module,exports){
+},{}],285:[function(require,module,exports){
 'use strict';
 
 //all requires must be explicit because browserify won't work with dynamic requires
@@ -43512,7 +42863,7 @@ module.exports = {
   validate: require('./validate')
 };
 
-},{"./_limit":272,"./_limitItems":273,"./_limitLength":274,"./_limitProperties":275,"./allOf":276,"./anyOf":277,"./comment":278,"./const":279,"./contains":280,"./dependencies":282,"./enum":283,"./format":284,"./if":285,"./items":287,"./multipleOf":288,"./not":289,"./oneOf":290,"./pattern":291,"./properties":292,"./propertyNames":293,"./ref":294,"./required":295,"./uniqueItems":296,"./validate":297}],287:[function(require,module,exports){
+},{"./_limit":271,"./_limitItems":272,"./_limitLength":273,"./_limitProperties":274,"./allOf":275,"./anyOf":276,"./comment":277,"./const":278,"./contains":279,"./dependencies":281,"./enum":282,"./format":283,"./if":284,"./items":286,"./multipleOf":287,"./not":288,"./oneOf":289,"./pattern":290,"./properties":291,"./propertyNames":292,"./ref":293,"./required":294,"./uniqueItems":295,"./validate":296}],286:[function(require,module,exports){
 'use strict';
 module.exports = function generate_items(it, $keyword, $ruleType) {
   var out = ' ';
@@ -43654,7 +43005,7 @@ module.exports = function generate_items(it, $keyword, $ruleType) {
   return out;
 }
 
-},{}],288:[function(require,module,exports){
+},{}],287:[function(require,module,exports){
 'use strict';
 module.exports = function generate_multipleOf(it, $keyword, $ruleType) {
   var out = ' ';
@@ -43736,7 +43087,7 @@ module.exports = function generate_multipleOf(it, $keyword, $ruleType) {
   return out;
 }
 
-},{}],289:[function(require,module,exports){
+},{}],288:[function(require,module,exports){
 'use strict';
 module.exports = function generate_not(it, $keyword, $ruleType) {
   var out = ' ';
@@ -43822,7 +43173,7 @@ module.exports = function generate_not(it, $keyword, $ruleType) {
   return out;
 }
 
-},{}],290:[function(require,module,exports){
+},{}],289:[function(require,module,exports){
 'use strict';
 module.exports = function generate_oneOf(it, $keyword, $ruleType) {
   var out = ' ';
@@ -43897,7 +43248,7 @@ module.exports = function generate_oneOf(it, $keyword, $ruleType) {
   return out;
 }
 
-},{}],291:[function(require,module,exports){
+},{}],290:[function(require,module,exports){
 'use strict';
 module.exports = function generate_pattern(it, $keyword, $ruleType) {
   var out = ' ';
@@ -43974,7 +43325,7 @@ module.exports = function generate_pattern(it, $keyword, $ruleType) {
   return out;
 }
 
-},{}],292:[function(require,module,exports){
+},{}],291:[function(require,module,exports){
 'use strict';
 module.exports = function generate_properties(it, $keyword, $ruleType) {
   var out = ' ';
@@ -44311,7 +43662,7 @@ module.exports = function generate_properties(it, $keyword, $ruleType) {
   return out;
 }
 
-},{}],293:[function(require,module,exports){
+},{}],292:[function(require,module,exports){
 'use strict';
 module.exports = function generate_propertyNames(it, $keyword, $ruleType) {
   var out = ' ';
@@ -44394,7 +43745,7 @@ module.exports = function generate_propertyNames(it, $keyword, $ruleType) {
   return out;
 }
 
-},{}],294:[function(require,module,exports){
+},{}],293:[function(require,module,exports){
 'use strict';
 module.exports = function generate_ref(it, $keyword, $ruleType) {
   var out = ' ';
@@ -44520,7 +43871,7 @@ module.exports = function generate_ref(it, $keyword, $ruleType) {
   return out;
 }
 
-},{}],295:[function(require,module,exports){
+},{}],294:[function(require,module,exports){
 'use strict';
 module.exports = function generate_required(it, $keyword, $ruleType) {
   var out = ' ';
@@ -44792,7 +44143,7 @@ module.exports = function generate_required(it, $keyword, $ruleType) {
   return out;
 }
 
-},{}],296:[function(require,module,exports){
+},{}],295:[function(require,module,exports){
 'use strict';
 module.exports = function generate_uniqueItems(it, $keyword, $ruleType) {
   var out = ' ';
@@ -44880,7 +44231,7 @@ module.exports = function generate_uniqueItems(it, $keyword, $ruleType) {
   return out;
 }
 
-},{}],297:[function(require,module,exports){
+},{}],296:[function(require,module,exports){
 'use strict';
 module.exports = function generate_validate(it, $keyword, $ruleType) {
   var out = '';
@@ -45364,7 +44715,7 @@ module.exports = function generate_validate(it, $keyword, $ruleType) {
   return out;
 }
 
-},{}],298:[function(require,module,exports){
+},{}],297:[function(require,module,exports){
 'use strict';
 
 var IDENTIFIER = /^[a-z_$][a-z0-9_$-]*$/i;
@@ -45512,7 +44863,7 @@ function validateKeyword(definition, throwError) {
     return false;
 }
 
-},{"./definition_schema":271,"./dotjs/custom":281}],299:[function(require,module,exports){
+},{"./definition_schema":270,"./dotjs/custom":280}],298:[function(require,module,exports){
 module.exports={
     "$schema": "http://json-schema.org/draft-07/schema#",
     "$id": "https://raw.githubusercontent.com/ajv-validator/ajv/master/lib/refs/data.json#",
@@ -45531,7 +44882,7 @@ module.exports={
     "additionalProperties": false
 }
 
-},{}],300:[function(require,module,exports){
+},{}],299:[function(require,module,exports){
 module.exports={
     "$schema": "http://json-schema.org/draft-06/schema#",
     "$id": "http://json-schema.org/draft-06/schema#",
@@ -45687,7 +45038,7 @@ module.exports={
     "default": {}
 }
 
-},{}],301:[function(require,module,exports){
+},{}],300:[function(require,module,exports){
 module.exports={
     "$schema": "http://json-schema.org/draft-07/schema#",
     "$id": "http://json-schema.org/draft-07/schema#",
@@ -45857,7 +45208,7 @@ module.exports={
     "default": true
 }
 
-},{}],302:[function(require,module,exports){
+},{}],301:[function(require,module,exports){
 // Copyright 2011 Mark Cavage <mcavage@gmail.com> All rights reserved.
 
 
@@ -45872,7 +45223,7 @@ module.exports = {
 
 };
 
-},{}],303:[function(require,module,exports){
+},{}],302:[function(require,module,exports){
 // Copyright 2011 Mark Cavage <mcavage@gmail.com> All rights reserved.
 
 var errors = require('./errors');
@@ -45901,7 +45252,7 @@ for (var e in errors) {
     module.exports[e] = errors[e];
 }
 
-},{"./errors":302,"./reader":304,"./types":305,"./writer":306}],304:[function(require,module,exports){
+},{"./errors":301,"./reader":303,"./types":304,"./writer":305}],303:[function(require,module,exports){
 // Copyright 2011 Mark Cavage <mcavage@gmail.com> All rights reserved.
 
 var assert = require('assert');
@@ -46165,7 +45516,7 @@ Reader.prototype._readTag = function (tag) {
 
 module.exports = Reader;
 
-},{"./errors":302,"./types":305,"assert":18,"safer-buffer":409}],305:[function(require,module,exports){
+},{"./errors":301,"./types":304,"assert":18,"safer-buffer":408}],304:[function(require,module,exports){
 // Copyright 2011 Mark Cavage <mcavage@gmail.com> All rights reserved.
 
 
@@ -46203,7 +45554,7 @@ module.exports = {
   Context: 128
 };
 
-},{}],306:[function(require,module,exports){
+},{}],305:[function(require,module,exports){
 // Copyright 2011 Mark Cavage <mcavage@gmail.com> All rights reserved.
 
 var assert = require('assert');
@@ -46522,7 +45873,7 @@ Writer.prototype._ensure = function (len) {
 
 module.exports = Writer;
 
-},{"./errors":302,"./types":305,"assert":18,"safer-buffer":409}],307:[function(require,module,exports){
+},{"./errors":301,"./types":304,"assert":18,"safer-buffer":408}],306:[function(require,module,exports){
 // Copyright 2011 Mark Cavage <mcavage@gmail.com> All rights reserved.
 
 // If you have no idea what ASN.1 or BER is, see this:
@@ -46544,7 +45895,7 @@ module.exports = {
 
 };
 
-},{"./ber/index":303}],308:[function(require,module,exports){
+},{"./ber/index":302}],307:[function(require,module,exports){
 (function (Buffer,process){(function (){
 // Copyright (c) 2012, Mark Cavage. All rights reserved.
 // Copyright 2015 Joyent, Inc.
@@ -46759,7 +46110,7 @@ function _setExports(ndebug) {
 module.exports = _setExports(process.env.NODE_NDEBUG);
 
 }).call(this)}).call(this,{"isBuffer":require("../../../../../../../AppData/Roaming/npm/node_modules/browserify/node_modules/is-buffer/index.js")},require('_process'))
-},{"../../../../../../../AppData/Roaming/npm/node_modules/browserify/node_modules/is-buffer/index.js":154,"_process":187,"assert":18,"stream":212,"util":253}],309:[function(require,module,exports){
+},{"../../../../../../../AppData/Roaming/npm/node_modules/browserify/node_modules/is-buffer/index.js":154,"_process":187,"assert":18,"stream":212,"util":253}],308:[function(require,module,exports){
 (function (process,setImmediate){(function (){
 (function (global, factory) {
     typeof exports === 'object' && typeof module !== 'undefined' ? factory(exports) :
@@ -51609,7 +50960,7 @@ module.exports = _setExports(process.env.NODE_NDEBUG);
 })));
 
 }).call(this)}).call(this,require('_process'),require("timers").setImmediate)
-},{"_process":187,"timers":247}],310:[function(require,module,exports){
+},{"_process":187,"timers":247}],309:[function(require,module,exports){
 
 /*!
  *  Copyright 2010 LearnBoost <dev@learnboost.com>
@@ -51823,7 +51174,7 @@ function canonicalizeResource (resource) {
 }
 module.exports.canonicalizeResource = canonicalizeResource
 
-},{"crypto":81,"url":248}],311:[function(require,module,exports){
+},{"crypto":81,"url":248}],310:[function(require,module,exports){
 (function (process,Buffer){(function (){
 var aws4 = exports,
     url = require('url'),
@@ -52200,7 +51551,7 @@ aws4.sign = function(request, credentials) {
 }
 
 }).call(this)}).call(this,require('_process'),require("buffer").Buffer)
-},{"./lru":312,"_process":187,"buffer":72,"crypto":81,"querystring":198,"url":248}],312:[function(require,module,exports){
+},{"./lru":311,"_process":187,"buffer":72,"crypto":81,"querystring":198,"url":248}],311:[function(require,module,exports){
 module.exports = function(size) {
   return new LruCache(size)
 }
@@ -52298,7 +51649,7 @@ function DoublyLinkedNode(key, val) {
   this.next = null
 }
 
-},{}],313:[function(require,module,exports){
+},{}],312:[function(require,module,exports){
 'use strict';
 
 var crypto_hash_sha512 = require('tweetnacl').lowlevel.crypto_hash;
@@ -52856,7 +52207,7 @@ module.exports = {
       pbkdf: bcrypt_pbkdf
 };
 
-},{"tweetnacl":456}],314:[function(require,module,exports){
+},{"tweetnacl":455}],313:[function(require,module,exports){
 function Caseless (dict) {
   this.dict = dict || {}
 }
@@ -52925,7 +52276,7 @@ module.exports.httpify = function (resp, headers) {
   return c
 }
 
-},{}],315:[function(require,module,exports){
+},{}],314:[function(require,module,exports){
 (function (Buffer){(function (){
 var util = require('util');
 var Stream = require('stream').Stream;
@@ -53137,7 +52488,7 @@ CombinedStream.prototype._emitError = function(err) {
 };
 
 }).call(this)}).call(this,{"isBuffer":require("../../../../../../../../AppData/Roaming/npm/node_modules/browserify/node_modules/is-buffer/index.js")})
-},{"../../../../../../../../AppData/Roaming/npm/node_modules/browserify/node_modules/is-buffer/index.js":154,"delayed-stream":319,"stream":212,"util":253}],316:[function(require,module,exports){
+},{"../../../../../../../../AppData/Roaming/npm/node_modules/browserify/node_modules/is-buffer/index.js":154,"delayed-stream":318,"stream":212,"util":253}],315:[function(require,module,exports){
 (function (Buffer){(function (){
 // Copyright Joyent, Inc. and other Node contributors.
 //
@@ -53248,7 +52599,7 @@ function objectToString(o) {
 }
 
 }).call(this)}).call(this,{"isBuffer":require("../../../../../../../../AppData/Roaming/npm/node_modules/browserify/node_modules/is-buffer/index.js")})
-},{"../../../../../../../../AppData/Roaming/npm/node_modules/browserify/node_modules/is-buffer/index.js":154}],317:[function(require,module,exports){
+},{"../../../../../../../../AppData/Roaming/npm/node_modules/browserify/node_modules/is-buffer/index.js":154}],316:[function(require,module,exports){
 (function (process){(function (){
 /**
  * This is the web browser implementation of `debug()`.
@@ -53437,7 +52788,7 @@ function localstorage() {
 }
 
 }).call(this)}).call(this,require('_process'))
-},{"./debug":318,"_process":187}],318:[function(require,module,exports){
+},{"./debug":317,"_process":187}],317:[function(require,module,exports){
 
 /**
  * This is the common logic for both the Node.js and web browser
@@ -53641,7 +52992,7 @@ function coerce(val) {
   return val;
 }
 
-},{"ms":377}],319:[function(require,module,exports){
+},{"ms":376}],318:[function(require,module,exports){
 var Stream = require('stream').Stream;
 var util = require('util');
 
@@ -53750,7 +53101,7 @@ DelayedStream.prototype._checkIfMaxDataSizeExceeded = function() {
   this.emit('error', new Error(message));
 };
 
-},{"stream":212,"util":253}],320:[function(require,module,exports){
+},{"stream":212,"util":253}],319:[function(require,module,exports){
 var crypto = require("crypto");
 var BigInteger = require("jsbn").BigInteger;
 var ECPointFp = require("./lib/ec.js").ECPointFp;
@@ -53810,7 +53161,7 @@ exports.ECKey = function(curve, key, isPublic)
 }
 
 
-},{"./lib/ec.js":321,"./lib/sec.js":322,"crypto":81,"jsbn":368,"safer-buffer":409}],321:[function(require,module,exports){
+},{"./lib/ec.js":320,"./lib/sec.js":321,"crypto":81,"jsbn":367,"safer-buffer":408}],320:[function(require,module,exports){
 // Basic Javascript Elliptic Curve implementation
 // Ported loosely from BouncyCastle's Java EC code
 // Only Fp curves implemented for now
@@ -54373,7 +53724,7 @@ var exports = {
 
 module.exports = exports
 
-},{"jsbn":368}],322:[function(require,module,exports){
+},{"jsbn":367}],321:[function(require,module,exports){
 // Named EC curves
 
 // Requires ec.js, jsbn.js, and jsbn2.js
@@ -54545,7 +53896,7 @@ module.exports = {
   "secp256r1":secp256r1
 }
 
-},{"./ec.js":321,"jsbn":368}],323:[function(require,module,exports){
+},{"./ec.js":320,"jsbn":367}],322:[function(require,module,exports){
 (function (process,global){(function (){
 /*!
  * @overview es6-promise - a tiny implementation of Promises/A+.
@@ -55723,7 +55074,7 @@ return Promise$1;
 
 
 }).call(this)}).call(this,require('_process'),typeof global !== "undefined" ? global : typeof self !== "undefined" ? self : typeof window !== "undefined" ? window : {})
-},{"_process":187}],324:[function(require,module,exports){
+},{"_process":187}],323:[function(require,module,exports){
 (function (global){(function (){
 "use strict";
 
@@ -55799,7 +55150,7 @@ module.exports = function () {
     return require("es6-promise").Promise;
 }();
 }).call(this)}).call(this,typeof global !== "undefined" ? global : typeof self !== "undefined" ? self : typeof window !== "undefined" ? window : {})
-},{"es6-promise":323}],325:[function(require,module,exports){
+},{"es6-promise":322}],324:[function(require,module,exports){
 "use strict";
 
 /* global module, require */
@@ -55885,7 +55236,7 @@ module.exports = function () {
         };
     };
 }();
-},{"./promise.js":324}],326:[function(require,module,exports){
+},{"./promise.js":323}],325:[function(require,module,exports){
 'use strict';
 
 var hasOwn = Object.prototype.hasOwnProperty;
@@ -56004,7 +55355,7 @@ module.exports = function extend() {
 	return target;
 };
 
-},{}],327:[function(require,module,exports){
+},{}],326:[function(require,module,exports){
 (function (process){(function (){
 /*
  * extsprintf.js: extended POSIX-style sprintf
@@ -56191,7 +55542,7 @@ function dumpException(ex)
 }
 
 }).call(this)}).call(this,require('_process'))
-},{"_process":187,"assert":18,"util":253}],328:[function(require,module,exports){
+},{"_process":187,"assert":18,"util":253}],327:[function(require,module,exports){
 'use strict';
 
 // do not edit .js files directly - edit src/index.jst
@@ -56239,7 +55590,7 @@ module.exports = function equal(a, b) {
   return a!==a && b!==b;
 };
 
-},{}],329:[function(require,module,exports){
+},{}],328:[function(require,module,exports){
 'use strict';
 
 module.exports = function (data, opts) {
@@ -56300,7 +55651,7 @@ module.exports = function (data, opts) {
     })(data);
 };
 
-},{}],330:[function(require,module,exports){
+},{}],329:[function(require,module,exports){
 var debug;
 try {
   /* eslint global-require: off */
@@ -56311,7 +55662,7 @@ catch (error) {
 }
 module.exports = debug;
 
-},{"debug":317}],331:[function(require,module,exports){
+},{"debug":316}],330:[function(require,module,exports){
 var url = require("url");
 var URL = url.URL;
 var http = require("http");
@@ -56811,7 +56162,7 @@ function createErrorType(code, defaultMessage) {
 module.exports = wrap({ http: http, https: https });
 module.exports.wrap = wrap;
 
-},{"./debug":330,"assert":18,"http":227,"https":150,"stream":212,"url":248}],332:[function(require,module,exports){
+},{"./debug":329,"assert":18,"http":227,"https":150,"stream":212,"url":248}],331:[function(require,module,exports){
 module.exports = ForeverAgent
 ForeverAgent.SSL = ForeverAgentSSL
 
@@ -56951,11 +56302,11 @@ function createConnectionSSL (port, host, options) {
   return tls.connect(options);
 }
 
-},{"http":227,"https":150,"net":1,"tls":1,"util":253}],333:[function(require,module,exports){
+},{"http":227,"https":150,"net":1,"tls":1,"util":253}],332:[function(require,module,exports){
 /* eslint-env browser */
 module.exports = typeof self == 'object' ? self.FormData : window.FormData;
 
-},{}],334:[function(require,module,exports){
+},{}],333:[function(require,module,exports){
 module.exports={
   "$id": "afterRequest.json#",
   "$schema": "http://json-schema.org/draft-06/schema#",
@@ -56987,7 +56338,7 @@ module.exports={
   }
 }
 
-},{}],335:[function(require,module,exports){
+},{}],334:[function(require,module,exports){
 module.exports={
   "$id": "beforeRequest.json#",
   "$schema": "http://json-schema.org/draft-06/schema#",
@@ -57019,7 +56370,7 @@ module.exports={
   }
 }
 
-},{}],336:[function(require,module,exports){
+},{}],335:[function(require,module,exports){
 module.exports={
   "$id": "browser.json#",
   "$schema": "http://json-schema.org/draft-06/schema#",
@@ -57041,7 +56392,7 @@ module.exports={
   }
 }
 
-},{}],337:[function(require,module,exports){
+},{}],336:[function(require,module,exports){
 module.exports={
   "$id": "cache.json#",
   "$schema": "http://json-schema.org/draft-06/schema#",
@@ -57064,7 +56415,7 @@ module.exports={
   }
 }
 
-},{}],338:[function(require,module,exports){
+},{}],337:[function(require,module,exports){
 module.exports={
   "$id": "content.json#",
   "$schema": "http://json-schema.org/draft-06/schema#",
@@ -57095,7 +56446,7 @@ module.exports={
   }
 }
 
-},{}],339:[function(require,module,exports){
+},{}],338:[function(require,module,exports){
 module.exports={
   "$id": "cookie.json#",
   "$schema": "http://json-schema.org/draft-06/schema#",
@@ -57133,7 +56484,7 @@ module.exports={
   }
 }
 
-},{}],340:[function(require,module,exports){
+},{}],339:[function(require,module,exports){
 module.exports={
   "$id": "creator.json#",
   "$schema": "http://json-schema.org/draft-06/schema#",
@@ -57155,7 +56506,7 @@ module.exports={
   }
 }
 
-},{}],341:[function(require,module,exports){
+},{}],340:[function(require,module,exports){
 module.exports={
   "$id": "entry.json#",
   "$schema": "http://json-schema.org/draft-06/schema#",
@@ -57210,7 +56561,7 @@ module.exports={
   }
 }
 
-},{}],342:[function(require,module,exports){
+},{}],341:[function(require,module,exports){
 module.exports={
   "$id": "har.json#",
   "$schema": "http://json-schema.org/draft-06/schema#",
@@ -57225,7 +56576,7 @@ module.exports={
   }
 }
 
-},{}],343:[function(require,module,exports){
+},{}],342:[function(require,module,exports){
 module.exports={
   "$id": "header.json#",
   "$schema": "http://json-schema.org/draft-06/schema#",
@@ -57247,7 +56598,7 @@ module.exports={
   }
 }
 
-},{}],344:[function(require,module,exports){
+},{}],343:[function(require,module,exports){
 'use strict'
 
 module.exports = {
@@ -57271,7 +56622,7 @@ module.exports = {
   timings: require('./timings.json')
 }
 
-},{"./afterRequest.json":334,"./beforeRequest.json":335,"./browser.json":336,"./cache.json":337,"./content.json":338,"./cookie.json":339,"./creator.json":340,"./entry.json":341,"./har.json":342,"./header.json":343,"./log.json":345,"./page.json":346,"./pageTimings.json":347,"./postData.json":348,"./query.json":349,"./request.json":350,"./response.json":351,"./timings.json":352}],345:[function(require,module,exports){
+},{"./afterRequest.json":333,"./beforeRequest.json":334,"./browser.json":335,"./cache.json":336,"./content.json":337,"./cookie.json":338,"./creator.json":339,"./entry.json":340,"./har.json":341,"./header.json":342,"./log.json":344,"./page.json":345,"./pageTimings.json":346,"./postData.json":347,"./query.json":348,"./request.json":349,"./response.json":350,"./timings.json":351}],344:[function(require,module,exports){
 module.exports={
   "$id": "log.json#",
   "$schema": "http://json-schema.org/draft-06/schema#",
@@ -57309,7 +56660,7 @@ module.exports={
   }
 }
 
-},{}],346:[function(require,module,exports){
+},{}],345:[function(require,module,exports){
 module.exports={
   "$id": "page.json#",
   "$schema": "http://json-schema.org/draft-06/schema#",
@@ -57343,7 +56694,7 @@ module.exports={
   }
 }
 
-},{}],347:[function(require,module,exports){
+},{}],346:[function(require,module,exports){
 module.exports={
   "$id": "pageTimings.json#",
   "$schema": "http://json-schema.org/draft-06/schema#",
@@ -57363,7 +56714,7 @@ module.exports={
   }
 }
 
-},{}],348:[function(require,module,exports){
+},{}],347:[function(require,module,exports){
 module.exports={
   "$id": "postData.json#",
   "$schema": "http://json-schema.org/draft-06/schema#",
@@ -57408,7 +56759,7 @@ module.exports={
   }
 }
 
-},{}],349:[function(require,module,exports){
+},{}],348:[function(require,module,exports){
 module.exports={
   "$id": "query.json#",
   "$schema": "http://json-schema.org/draft-06/schema#",
@@ -57430,7 +56781,7 @@ module.exports={
   }
 }
 
-},{}],350:[function(require,module,exports){
+},{}],349:[function(require,module,exports){
 module.exports={
   "$id": "request.json#",
   "$schema": "http://json-schema.org/draft-06/schema#",
@@ -57489,7 +56840,7 @@ module.exports={
   }
 }
 
-},{}],351:[function(require,module,exports){
+},{}],350:[function(require,module,exports){
 module.exports={
   "$id": "response.json#",
   "$schema": "http://json-schema.org/draft-06/schema#",
@@ -57545,7 +56896,7 @@ module.exports={
   }
 }
 
-},{}],352:[function(require,module,exports){
+},{}],351:[function(require,module,exports){
 module.exports={
   "$id": "timings.json#",
   "$schema": "http://json-schema.org/draft-06/schema#",
@@ -57589,7 +56940,7 @@ module.exports={
   }
 }
 
-},{}],353:[function(require,module,exports){
+},{}],352:[function(require,module,exports){
 function HARError (errors) {
   var message = 'validation failed'
 
@@ -57608,7 +56959,7 @@ HARError.prototype = Error.prototype
 
 module.exports = HARError
 
-},{}],354:[function(require,module,exports){
+},{}],353:[function(require,module,exports){
 var Ajv = require('ajv')
 var HARError = require('./error')
 var schemas = require('har-schema')
@@ -57712,7 +57063,7 @@ exports.timings = function (data) {
   return validate('timings', data)
 }
 
-},{"./error":353,"ajv":259,"ajv/lib/refs/json-schema-draft-06.json":300,"har-schema":344}],355:[function(require,module,exports){
+},{"./error":352,"ajv":258,"ajv/lib/refs/json-schema-draft-06.json":299,"har-schema":343}],354:[function(require,module,exports){
 // Copyright 2015 Joyent, Inc.
 
 var parser = require('./parser');
@@ -57743,7 +57094,7 @@ module.exports = {
   verifyHMAC: verify.verifyHMAC
 };
 
-},{"./parser":356,"./signer":357,"./utils":358,"./verify":359}],356:[function(require,module,exports){
+},{"./parser":355,"./signer":356,"./utils":357,"./verify":358}],355:[function(require,module,exports){
 // Copyright 2012 Joyent, Inc.  All rights reserved.
 
 var assert = require('assert-plus');
@@ -58060,7 +57411,7 @@ module.exports = {
 
 };
 
-},{"./utils":358,"assert-plus":308,"util":253}],357:[function(require,module,exports){
+},{"./utils":357,"assert-plus":307,"util":253}],356:[function(require,module,exports){
 (function (Buffer){(function (){
 // Copyright 2012 Joyent, Inc.  All rights reserved.
 
@@ -58465,7 +57816,7 @@ module.exports = {
 };
 
 }).call(this)}).call(this,{"isBuffer":require("../../../../../../../../AppData/Roaming/npm/node_modules/browserify/node_modules/is-buffer/index.js")})
-},{"../../../../../../../../AppData/Roaming/npm/node_modules/browserify/node_modules/is-buffer/index.js":154,"./utils":358,"assert-plus":308,"crypto":81,"http":227,"jsprim":372,"sshpk":441,"util":253}],358:[function(require,module,exports){
+},{"../../../../../../../../AppData/Roaming/npm/node_modules/browserify/node_modules/is-buffer/index.js":154,"./utils":357,"assert-plus":307,"crypto":81,"http":227,"jsprim":371,"sshpk":440,"util":253}],357:[function(require,module,exports){
 // Copyright 2012 Joyent, Inc.  All rights reserved.
 
 var assert = require('assert-plus');
@@ -58579,7 +57930,7 @@ module.exports = {
   }
 };
 
-},{"assert-plus":308,"sshpk":441,"util":253}],359:[function(require,module,exports){
+},{"assert-plus":307,"sshpk":440,"util":253}],358:[function(require,module,exports){
 (function (Buffer){(function (){
 // Copyright 2015 Joyent, Inc.
 
@@ -58671,7 +58022,7 @@ module.exports = {
 };
 
 }).call(this)}).call(this,require("buffer").Buffer)
-},{"./utils":358,"assert-plus":308,"buffer":72,"crypto":81,"sshpk":441}],360:[function(require,module,exports){
+},{"./utils":357,"assert-plus":307,"buffer":72,"crypto":81,"sshpk":440}],359:[function(require,module,exports){
 (function (Buffer){(function (){
 /**
  * Module dependencies.
@@ -58916,7 +58267,7 @@ function isDefaultPort(port, secure) {
 }
 
 }).call(this)}).call(this,require("buffer").Buffer)
-},{"agent-base":257,"assert":18,"buffer":72,"debug":361,"net":1,"tls":1,"url":248,"util":253}],361:[function(require,module,exports){
+},{"agent-base":256,"assert":18,"buffer":72,"debug":360,"net":1,"tls":1,"url":248,"util":253}],360:[function(require,module,exports){
 (function (process){(function (){
 "use strict";
 
@@ -59100,7 +58451,7 @@ formatters.j = function (v) {
 
 
 }).call(this)}).call(this,require('_process'))
-},{"./common":362,"_process":187}],362:[function(require,module,exports){
+},{"./common":361,"_process":187}],361:[function(require,module,exports){
 "use strict";
 
 /**
@@ -59351,7 +58702,7 @@ function setup(env) {
 module.exports = setup;
 
 
-},{"ms":363}],363:[function(require,module,exports){
+},{"ms":362}],362:[function(require,module,exports){
 /**
  * Helpers.
  */
@@ -59515,7 +58866,7 @@ function plural(ms, msAbs, n, name) {
   return Math.round(ms / n) + ' ' + name + (isPlural ? 's' : '');
 }
 
-},{}],364:[function(require,module,exports){
+},{}],363:[function(require,module,exports){
 'use strict';
 
 var ip = exports;
@@ -59933,7 +59284,7 @@ ip.fromLong = function(ipl) {
       (ipl & 255) );
 };
 
-},{"buffer":72,"os":163}],365:[function(require,module,exports){
+},{"buffer":72,"os":163}],364:[function(require,module,exports){
 module.exports      = isTypedArray
 isTypedArray.strict = isStrictTypedArray
 isTypedArray.loose  = isLooseTypedArray
@@ -59976,7 +59327,7 @@ function isLooseTypedArray(arr) {
   return names[toString.call(arr)]
 }
 
-},{}],366:[function(require,module,exports){
+},{}],365:[function(require,module,exports){
 var stream = require('stream')
 
 
@@ -60005,7 +59356,7 @@ module.exports.isReadable = isReadable
 module.exports.isWritable = isWritable
 module.exports.isDuplex   = isDuplex
 
-},{"stream":212}],367:[function(require,module,exports){
+},{"stream":212}],366:[function(require,module,exports){
 /*!
  * jQuery JavaScript Library v3.5.1
  * https://jquery.com/
@@ -70879,7 +70230,7 @@ if ( typeof noGlobal === "undefined" ) {
 return jQuery;
 } );
 
-},{}],368:[function(require,module,exports){
+},{}],367:[function(require,module,exports){
 (function(){
 
     // Copyright (c) 2005  Tom Wu
@@ -72238,7 +71589,7 @@ return jQuery;
 
 }).call(this);
 
-},{}],369:[function(require,module,exports){
+},{}],368:[function(require,module,exports){
 'use strict';
 
 var traverse = module.exports = function (schema, opts, cb) {
@@ -72329,7 +71680,7 @@ function escapeJsonPtr(str) {
   return str.replace(/~/g, '~0').replace(/\//g, '~1');
 }
 
-},{}],370:[function(require,module,exports){
+},{}],369:[function(require,module,exports){
 /**
  * JSONSchema Validator - Validates JavaScript objects using JSON Schemas
  *	(http://www.json.com/json-schema-proposal/)
@@ -72604,7 +71955,7 @@ exports.mustBeValid = function(result){
 return exports;
 }));
 
-},{}],371:[function(require,module,exports){
+},{}],370:[function(require,module,exports){
 exports = module.exports = stringify
 exports.getSerialize = serializer
 
@@ -72633,7 +71984,7 @@ function serializer(replacer, cycleReplacer) {
   }
 }
 
-},{}],372:[function(require,module,exports){
+},{}],371:[function(require,module,exports){
 /*
  * lib/jsprim.js: utilities for primitive JavaScript types
  */
@@ -73370,7 +72721,7 @@ function mergeObjects(provided, overrides, defaults)
 	return (rv);
 }
 
-},{"assert-plus":308,"extsprintf":327,"json-schema":370,"util":253,"verror":461}],373:[function(require,module,exports){
+},{"assert-plus":307,"extsprintf":326,"json-schema":369,"util":253,"verror":460}],372:[function(require,module,exports){
 (function (global){(function (){
 /**
  * @license
@@ -90535,7 +89886,7 @@ function mergeObjects(provided, overrides, defaults)
 }.call(this));
 
 }).call(this)}).call(this,typeof global !== "undefined" ? global : typeof self !== "undefined" ? self : typeof window !== "undefined" ? window : {})
-},{}],374:[function(require,module,exports){
+},{}],373:[function(require,module,exports){
 module.exports={
   "application/1d-interleaved-parityfec": {
     "source": "iana"
@@ -98713,7 +98064,7 @@ module.exports={
   }
 }
 
-},{}],375:[function(require,module,exports){
+},{}],374:[function(require,module,exports){
 /*!
  * mime-db
  * Copyright(c) 2014 Jonathan Ong
@@ -98726,7 +98077,7 @@ module.exports={
 
 module.exports = require('./db.json')
 
-},{"./db.json":374}],376:[function(require,module,exports){
+},{"./db.json":373}],375:[function(require,module,exports){
 /*!
  * mime-types
  * Copyright(c) 2014 Jonathan Ong
@@ -98916,7 +98267,7 @@ function populateMaps (extensions, types) {
   })
 }
 
-},{"mime-db":375,"path":180}],377:[function(require,module,exports){
+},{"mime-db":374,"path":180}],376:[function(require,module,exports){
 /**
  * Helpers.
  */
@@ -99070,7 +98421,7 @@ function plural(ms, n, name) {
   return Math.ceil(ms / n) + ' ' + name + 's';
 }
 
-},{}],378:[function(require,module,exports){
+},{}],377:[function(require,module,exports){
 (function (process){(function (){
 /* ============================================================
  * node-binance-api
@@ -104535,7 +103886,7 @@ let api = function Binance(options = {}) {
 module.exports = api;
 //https://github.com/binance-exchange/binance-official-api-docs
 }).call(this)}).call(this,require('_process'))
-},{"_process":187,"async":309,"crypto":81,"fs":1,"https-proxy-agent":360,"request":395,"socks-proxy-agent":413,"string-hash":447,"url":248,"ws":462}],379:[function(require,module,exports){
+},{"_process":187,"async":308,"crypto":81,"fs":1,"https-proxy-agent":359,"request":394,"socks-proxy-agent":412,"string-hash":446,"url":248,"ws":461}],378:[function(require,module,exports){
 (function (process,Buffer){(function (){
 var http = require('follow-redirects').http,
 https = require('follow-redirects').https,
@@ -105284,7 +104635,7 @@ var ConnectManager = function(client, parserManager) {
     };
 
 }).call(this)}).call(this,require('_process'),require("buffer").Buffer)
-},{"./nrc-parser-manager":380,"./nrc-serializer-manager":381,"_process":187,"buffer":72,"debug":382,"events":114,"follow-redirects":331,"url":248,"util":253,"zlib":70}],380:[function(require,module,exports){
+},{"./nrc-parser-manager":379,"./nrc-serializer-manager":380,"_process":187,"buffer":72,"debug":381,"events":114,"follow-redirects":330,"url":248,"util":253,"zlib":70}],379:[function(require,module,exports){
 var ParserManager = function(){
 	var registry={}, defaultParser = null;
 
@@ -105442,7 +104793,7 @@ parserManager.add({
 return parserManager;
 }
 
-},{"xml2js":468}],381:[function(require,module,exports){
+},{"xml2js":467}],380:[function(require,module,exports){
 var xmlserializer = require('xml2js');
 
 var SerializerManager = function(){
@@ -105628,7 +104979,7 @@ serializerManager.add({
 return serializerManager;
 
 };
-},{"xml2js":468}],382:[function(require,module,exports){
+},{"xml2js":467}],381:[function(require,module,exports){
 
 /**
  * This is the web browser implementation of `debug()`.
@@ -105798,7 +105149,7 @@ function localstorage(){
   } catch (e) {}
 }
 
-},{"./debug":383}],383:[function(require,module,exports){
+},{"./debug":382}],382:[function(require,module,exports){
 
 /**
  * This is the common logic for both the Node.js and web browser
@@ -105997,7 +105348,7 @@ function coerce(val) {
   return val;
 }
 
-},{"ms":384}],384:[function(require,module,exports){
+},{"ms":383}],383:[function(require,module,exports){
 /**
  * Helpers.
  */
@@ -106124,13 +105475,13 @@ function plural(ms, n, name) {
   return Math.ceil(ms / n) + ' ' + name + 's';
 }
 
-},{}],385:[function(require,module,exports){
+},{}],384:[function(require,module,exports){
 (function (global){(function (){
 /* Notiflix (https://www.notiflix.com) - Version: 2.6.0 - Author: Furkan MT (https://github.com/furcan) - Copyright 2020 Notiflix, MIT Licence (https://opensource.org/licenses/MIT) */
 
 (function(t,e){"function"==typeof define&&define.amd?define([],function(){return e(t)}):"object"==typeof module&&"object"==typeof module.exports?module.exports=e(t):t.Notiflix=e(t)})("undefined"==typeof global?"undefined"==typeof window?this:window:global,function(t){'use strict';if("undefined"==typeof t&&"undefined"==typeof t.document)return!1;var e,i,a,o,n,r="\n\nVisit documentation page to learn more: https://www.notiflix.com/documentation",s="-apple-system, BlinkMacSystemFont, \"Segoe UI\", Roboto, \"Helvetica Neue\", Arial, \"Noto Sans\", sans-serif, \"Apple Color Emoji\", \"Segoe UI Emoji\", \"Segoe UI Symbol\", \"Noto Color Emoji\"",l={wrapID:"NotiflixNotifyWrap",width:"280px",position:"right-top",distance:"10px",opacity:1,borderRadius:"5px",rtl:!1,timeout:3e3,messageMaxLength:110,backOverlay:!1,backOverlayColor:"rgba(0,0,0,0.5)",plainText:!0,showOnlyTheLastOne:!1,clickToClose:!1,ID:"NotiflixNotify",className:"notiflix-notify",zindex:4001,useGoogleFont:!1,fontFamily:"Quicksand",fontSize:"13px",cssAnimation:!0,cssAnimationDuration:400,cssAnimationStyle:"fade",closeButton:!1,useIcon:!0,useFontAwesome:!1,fontAwesomeIconStyle:"basic",fontAwesomeIconSize:"34px",success:{background:"#32c682",textColor:"#fff",childClassName:"success",notiflixIconColor:"rgba(0,0,0,0.2)",fontAwesomeClassName:"fas fa-check-circle",fontAwesomeIconColor:"rgba(0,0,0,0.2)",backOverlayColor:"rgba(50,198,130,0.2)"},failure:{background:"#ff5549",textColor:"#fff",childClassName:"failure",notiflixIconColor:"rgba(0,0,0,0.2)",fontAwesomeClassName:"fas fa-times-circle",fontAwesomeIconColor:"rgba(0,0,0,0.2)",backOverlayColor:"rgba(255,85,73,0.2)"},warning:{background:"#eebf31",textColor:"#fff",childClassName:"warning",notiflixIconColor:"rgba(0,0,0,0.2)",fontAwesomeClassName:"fas fa-exclamation-circle",fontAwesomeIconColor:"rgba(0,0,0,0.2)",backOverlayColor:"rgba(238,191,49,0.2)"},info:{background:"#26c0d3",textColor:"#fff",childClassName:"info",notiflixIconColor:"rgba(0,0,0,0.2)",fontAwesomeClassName:"fas fa-info-circle",fontAwesomeIconColor:"rgba(0,0,0,0.2)",backOverlayColor:"rgba(38,192,211,0.2)"}},m={ID:"NotiflixReportWrap",className:"notiflix-report",width:"320px",backgroundColor:"#f8f8f8",borderRadius:"25px",rtl:!1,zindex:4002,backOverlay:!0,backOverlayColor:"rgba(0,0,0,0.5)",useGoogleFont:!1,fontFamily:"Quicksand",svgSize:"110px",plainText:!0,titleFontSize:"16px",titleMaxLength:34,messageFontSize:"13px",messageMaxLength:400,buttonFontSize:"14px",buttonMaxLength:34,cssAnimation:!0,cssAnimationDuration:360,cssAnimationStyle:"fade",success:{svgColor:"#32c682",titleColor:"#1e1e1e",messageColor:"#242424",buttonBackground:"#32c682",buttonColor:"#fff",backOverlayColor:"rgba(50,198,130,0.2)"},failure:{svgColor:"#ff5549",titleColor:"#1e1e1e",messageColor:"#242424",buttonBackground:"#ff5549",buttonColor:"#fff",backOverlayColor:"rgba(255,85,73,0.2)"},warning:{svgColor:"#eebf31",titleColor:"#1e1e1e",messageColor:"#242424",buttonBackground:"#eebf31",buttonColor:"#fff",backOverlayColor:"rgba(238,191,49,0.2)"},info:{svgColor:"#26c0d3",titleColor:"#1e1e1e",messageColor:"#242424",buttonBackground:"#26c0d3",buttonColor:"#fff",backOverlayColor:"rgba(38,192,211,0.2)"}},c={ID:"NotiflixConfirmWrap",className:"notiflix-confirm",width:"300px",zindex:4003,position:"center",distance:"10px",backgroundColor:"#f8f8f8",borderRadius:"25px",backOverlay:!0,backOverlayColor:"rgba(0,0,0,0.5)",rtl:!1,useGoogleFont:!1,fontFamily:"Quicksand",cssAnimation:!0,cssAnimationStyle:"fade",cssAnimationDuration:300,plainText:!0,titleColor:"#32c682",titleFontSize:"16px",titleMaxLength:34,messageColor:"#1e1e1e",messageFontSize:"14px",messageMaxLength:110,buttonsFontSize:"15px",buttonsMaxLength:34,okButtonColor:"#f8f8f8",okButtonBackground:"#32c682",cancelButtonColor:"#f8f8f8",cancelButtonBackground:"#a9a9a9"},p={ID:"NotiflixLoadingWrap",className:"notiflix-loading",zindex:4e3,backgroundColor:"rgba(0,0,0,0.8)",rtl:!1,useGoogleFont:!1,fontFamily:"Quicksand",cssAnimation:!0,cssAnimationDuration:400,clickToClose:!1,customSvgUrl:null,svgSize:"80px",svgColor:"#32c682",messageID:"NotiflixLoadingMessage",messageFontSize:"15px",messageMaxLength:34,messageColor:"#dcdcdc"},f={ID:"NotiflixBlockWrap",querySelectorLimit:200,className:"notiflix-block",position:"absolute",zindex:1e3,backgroundColor:"rgba(255,255,255,0.9)",rtl:!1,useGoogleFont:!1,fontFamily:"Quicksand",cssAnimation:!0,cssAnimationDuration:300,svgSize:"45px",svgColor:"#383838",messageFontSize:"14px",messageMaxLength:34,messageColor:"#383838"},d=function(t,e){return console.error("%c "+t+" ","padding:2px;border-radius:20px;color:#fff;background:#ff5549","\n"+e+r)},x=function(t,e){return console.log("%c "+t+" ","padding:2px;border-radius:20px;color:#fff;background:#26c0d3","\n"+e+r)},g=function(e){return e||(e="head"),null!==t.document[e]||(d("Notiflix","\nNotiflix needs to be appended to the \"<"+e+">\" element, but you called it before the \"<"+e+">\" element has been created."),!1)},b=function(){return"[id^=NotiflixNotifyWrap]{pointer-events:none;position:fixed;z-index:4001;opacity:1;right:10px;top:10px;width:280px;max-width:96%;-webkit-box-sizing:border-box;box-sizing:border-box;background:transparent}[id^=NotiflixNotifyWrap].nx-flex-center-center{max-height:calc(100vh - 20px);overflow-x:hidden;overflow-y:auto;display:-webkit-box;display:-webkit-flex;display:-ms-flexbox;display:flex;-webkit-flex-wrap:wrap;-ms-flex-wrap:wrap;flex-wrap:wrap;-webkit-box-orient:vertical;-webkit-box-direction:normal;-webkit-flex-direction:column;-ms-flex-direction:column;flex-direction:column;-webkit-box-pack:center;-webkit-justify-content:center;-ms-flex-pack:center;justify-content:center;-webkit-box-align:center;-webkit-align-items:center;-ms-flex-align:center;align-items:center;margin:auto}[id^=NotiflixNotifyWrap]::-webkit-scrollbar{width:0;height:0}[id^=NotiflixNotifyWrap]::-webkit-scrollbar-thumb{background:transparent}[id^=NotiflixNotifyWrap]::-webkit-scrollbar-track{background:transparent}[id^=NotiflixNotifyWrap] *{-webkit-box-sizing:border-box;box-sizing:border-box}[id^=NotiflixNotifyOverlay]{-webkit-transition:background .3s ease-in-out;-o-transition:background .3s ease-in-out;transition:background .3s ease-in-out}[id^=NotiflixNotifyWrap]>div{pointer-events:all;-webkit-user-select:none;-moz-user-select:none;-ms-user-select:none;user-select:none;font-family:\"Quicksand\",-apple-system,BlinkMacSystemFont,\"Segoe UI\",Roboto,\"Helvetica Neue\",Arial,sans-serif;width:100%;display:inline-block;position:relative;margin:0 0 10px;border-radius:5px;background:#1e1e1e;color:#fff;padding:10px 12px;font-size:14px;line-height:1.4}[id^=NotiflixNotifyWrap]>div:last-child{margin:0}[id^=NotiflixNotifyWrap]>div.with-callback{cursor:pointer}[id^=NotiflixNotifyWrap]>div.with-icon{padding:8px}[id^=NotiflixNotifyWrap]>div.click-to-close{cursor:pointer}[id^=NotiflixNotifyWrap]>div.with-close-button{padding:10px 30px 10px 12px}[id^=NotiflixNotifyWrap]>div.with-icon.with-close-button{padding:6px 30px 6px 6px}[id^=NotiflixNotifyWrap]>div>span.the-message{font-weight:normal;font-family:inherit!important;word-break:break-all;word-break:break-word}[id^=NotiflixNotifyWrap]>div>span.notify-close-button{cursor:pointer;-webkit-transition:all .2s ease-in-out;-o-transition:all .2s ease-in-out;transition:all .2s ease-in-out;position:absolute;right:8px;top:0;bottom:0;margin:auto;color:inherit;width:16px;height:16px}[id^=NotiflixNotifyWrap]>div>span.notify-close-button:hover{-webkit-transform:rotate(90deg);transform:rotate(90deg)}[id^=NotiflixNotifyWrap]>div>span.notify-close-button>svg{position:absolute;width:16px;height:16px;right:0;top:0}[id^=NotiflixNotifyWrap]>div>.nmi{position:absolute;width:40px;height:40px;font-size:30px;line-height:40px;text-align:center;left:8px;top:0;bottom:0;margin:auto;border-radius:inherit}[id^=NotiflixNotifyWrap]>div>.wfa.shadow{color:inherit;background:rgba(0,0,0,.15);box-shadow:inset 0 0 34px rgba(0,0,0,.2);text-shadow:0 0 10px rgba(0,0,0,.3)}[id^=NotiflixNotifyWrap]>div>span.with-icon{position:relative;float:left;width:calc(100% - 40px);margin:0 0 0 40px;padding:0 0 0 10px;-webkit-box-sizing:border-box;box-sizing:border-box}[id^=NotiflixNotifyWrap]>div.rtl-on>.nmi{left:auto;right:8px}[id^=NotiflixNotifyWrap]>div.rtl-on>span.with-icon{padding:0 10px 0 0;margin:0 40px 0 0}[id^=NotiflixNotifyWrap]>div.rtl-on>span.notify-close-button{right:auto;left:8px}[id^=NotiflixNotifyWrap]>div.with-icon.with-close-button.rtl-on{padding:6px 6px 6px 30px}[id^=NotiflixNotifyWrap]>div.with-close-button.rtl-on{padding:10px 12px 10px 30px}[id^=NotiflixNotifyOverlay].with-animation,[id^=NotiflixNotifyWrap]>div.with-animation.nx-fade{-webkit-animation:notify-animation-fade .3s ease-in-out 0s normal;animation:notify-animation-fade .3s ease-in-out 0s normal}@-webkit-keyframes notify-animation-fade{0%{opacity:0}100%{opacity:1}}@keyframes notify-animation-fade{0%{opacity:0}100%{opacity:1}}[id^=NotiflixNotifyWrap]>div.with-animation.nx-zoom{-webkit-animation:notify-animation-zoom .3s ease-in-out 0s normal;animation:notify-animation-zoom .3s ease-in-out 0s normal}@-webkit-keyframes notify-animation-zoom{0%{-webkit-transform:scale(0);transform:scale(0)}50%{-webkit-transform:scale(1.05);transform:scale(1.05)}100%{-webkit-transform:scale(1);transform:scale(1)}}@keyframes notify-animation-zoom{0%{-webkit-transform:scale(0);transform:scale(0)}50%{-webkit-transform:scale(1.05);transform:scale(1.05)}100%{-webkit-transform:scale(1);transform:scale(1)}}[id^=NotiflixNotifyWrap]>div.with-animation.nx-from-right{-webkit-animation:notify-animation-from-right .3s ease-in-out 0s normal;animation:notify-animation-from-right .3s ease-in-out 0s normal}@-webkit-keyframes notify-animation-from-right{0%{right:-300px;opacity:0}50%{right:8px;opacity:1}100%{right:0;opacity:1}}@keyframes notify-animation-from-right{0%{right:-300px;opacity:0}50%{right:8px;opacity:1}100%{right:0;opacity:1}}[id^=NotiflixNotifyWrap]>div.with-animation.nx-from-left{-webkit-animation:notify-animation-from-left .3s ease-in-out 0s normal;animation:notify-animation-from-left .3s ease-in-out 0s normal}@-webkit-keyframes notify-animation-from-left{0%{left:-300px;opacity:0}50%{left:8px;opacity:1}100%{left:0;opacity:1}}@keyframes notify-animation-from-left{0%{left:-300px;opacity:0}50%{left:8px;opacity:1}100%{left:0;opacity:1}}[id^=NotiflixNotifyWrap]>div.with-animation.nx-from-top{-webkit-animation:notify-animation-from-top .3s ease-in-out 0s normal;animation:notify-animation-from-top .3s ease-in-out 0s normal}@-webkit-keyframes notify-animation-from-top{0%{top:-50px;opacity:0}50%{top:8px;opacity:1}100%{top:0;opacity:1}}@keyframes notify-animation-from-top{0%{top:-50px;opacity:0}50%{top:8px;opacity:1}100%{top:0;opacity:1}}[id^=NotiflixNotifyWrap]>div.with-animation.nx-from-bottom{-webkit-animation:notify-animation-from-bottom .3s ease-in-out 0s normal;animation:notify-animation-from-bottom .3s ease-in-out 0s normal}@-webkit-keyframes notify-animation-from-bottom{0%{bottom:-50px;opacity:0}50%{bottom:8px;opacity:1}100%{bottom:0;opacity:1}}@keyframes notify-animation-from-bottom{0%{bottom:-50px;opacity:0}50%{bottom:8px;opacity:1}100%{bottom:0;opacity:1}}[id^=NotiflixNotifyOverlay].with-animation.remove,[id^=NotiflixNotifyWrap]>div.with-animation.nx-fade.remove{opacity:0;-webkit-animation:notify-remove-fade .3s ease-in-out 0s normal;animation:notify-remove-fade .3s ease-in-out 0s normal}@-webkit-keyframes notify-remove-fade{0%{opacity:1}100%{opacity:0}}@keyframes notify-remove-fade{0%{opacity:1}100%{opacity:0}}[id^=NotiflixNotifyWrap]>div.with-animation.nx-zoom.remove{-webkit-transform:scale(0);transform:scale(0);-webkit-animation:notify-remove-zoom .3s ease-in-out 0s normal;animation:notify-remove-zoom .3s ease-in-out 0s normal}@-webkit-keyframes notify-remove-zoom{0%{-webkit-transform:scale(1);transform:scale(1)}50%{-webkit-transform:scale(1.05);transform:scale(1.05)}100%{-webkit-transform:scale(0);transform:scale(0)}}@keyframes notify-remove-zoom{0%{-webkit-transform:scale(1);transform:scale(1)}50%{-webkit-transform:scale(1.05);transform:scale(1.05)}100%{-webkit-transform:scale(0);transform:scale(0)}}[id^=NotiflixNotifyWrap]>div.with-animation.nx-from-top.remove{opacity:0;-webkit-animation:notify-remove-to-top .3s ease-in-out 0s normal;animation:notify-remove-to-top .3s ease-in-out 0s normal}@-webkit-keyframes notify-remove-to-top{0%{top:0;opacity:1}50%{top:8px;opacity:1}100%{top:-50px;opacity:0}}@keyframes notify-remove-to-top{0%{top:0;opacity:1}50%{top:8px;opacity:1}100%{top:-50px;opacity:0}}[id^=NotiflixNotifyWrap]>div.with-animation.nx-from-right.remove{opacity:0;-webkit-animation:notify-remove-to-right .3s ease-in-out 0s normal;animation:notify-remove-to-right .3s ease-in-out 0s normal}@-webkit-keyframes notify-remove-to-right{0%{right:0;opacity:1}50%{right:8px;opacity:1}100%{right:-300px;opacity:0}}@keyframes notify-remove-to-right{0%{right:0;opacity:1}50%{right:8px;opacity:1}100%{right:-300px;opacity:0}}[id^=NotiflixNotifyWrap]>div.with-animation.nx-from-bottom.remove{opacity:0;-webkit-animation:notify-remove-to-bottom .3s ease-in-out 0s normal;animation:notify-remove-to-bottom .3s ease-in-out 0s normal}@-webkit-keyframes notify-remove-to-bottom{0%{bottom:0;opacity:1}50%{bottom:8px;opacity:1}100%{bottom:-50px;opacity:0}}@keyframes notify-remove-to-bottom{0%{bottom:0;opacity:1}50%{bottom:8px;opacity:1}100%{bottom:-50px;opacity:0}}[id^=NotiflixNotifyWrap]>div.with-animation.nx-from-left.remove{opacity:0;-webkit-animation:notify-remove-to-left .3s ease-in-out 0s normal;animation:notify-remove-to-left .3s ease-in-out 0s normal}@-webkit-keyframes notify-remove-to-left{0%{left:0;opacity:1}50%{left:8px;opacity:1}100%{left:-300px;opacity:0}}@keyframes notify-remove-to-left{0%{left:0;opacity:1}50%{left:8px;opacity:1}100%{left:-300px;opacity:0}}[id^=NotiflixReportWrap]{position:fixed;z-index:4002;width:100%;height:100%;-webkit-box-sizing:border-box;box-sizing:border-box;font-family:\"Quicksand\",-apple-system,BlinkMacSystemFont,\"Segoe UI\",Roboto,\"Helvetica Neue\",Arial,sans-serif;left:0;top:0;padding:10px;color:#1e1e1e;border-radius:25px;background:transparent;display:-webkit-box;display:-webkit-flex;display:-ms-flexbox;display:flex;-webkit-flex-wrap:wrap;-ms-flex-wrap:wrap;flex-wrap:wrap;-webkit-box-orient:vertical;-webkit-box-direction:normal;-webkit-flex-direction:column;-ms-flex-direction:column;flex-direction:column;-webkit-box-align:center;-webkit-align-items:center;-ms-flex-align:center;align-items:center;-webkit-box-pack:center;-webkit-justify-content:center;-ms-flex-pack:center;justify-content:center}[id^=NotiflixReportWrap] *{-webkit-box-sizing:border-box;box-sizing:border-box}[id^=NotiflixReportWrap]>div[class*=\"-overlay\"]{width:100%;height:100%;left:0;top:0;background:rgba(255,255,255,.5);position:fixed;z-index:0}[id^=NotiflixReportWrap]>div[class*=\"-content\"]{width:320px;max-width:100%;max-height:96vh;overflow-x:hidden;overflow-y:auto;border-radius:inherit;padding:10px;-webkit-filter:drop-shadow(0 0 5px rgba(0, 0, 0, .05));filter:drop-shadow(0 0 5px rgba(0, 0, 0, .05));border:1px solid rgba(0,0,0,.03);background:#f8f8f8;position:relative;z-index:1}[id^=NotiflixReportWrap]>div[class*=\"-content\"]::-webkit-scrollbar{width:0;height:0}[id^=NotiflixReportWrap]>div[class*=\"-content\"]::-webkit-scrollbar-thumb{background:transparent}[id^=NotiflixReportWrap]>div[class*=\"-content\"]::-webkit-scrollbar-track{background:transparent}[id^=NotiflixReportWrap]>div[class*=\"-content\"]>div[class$=\"-icon\"]{-webkit-user-select:none;-moz-user-select:none;-ms-user-select:none;user-select:none;width:110px;height:110px;display:block;margin:6px auto 12px}[id^=NotiflixReportWrap]>div[class*=\"-content\"]>div[class$=\"-icon\"] svg{min-width:100%;max-width:100%;height:auto}[id^=NotiflixReportWrap]>*>h5{word-break:break-all;word-break:break-word;font-family:inherit!important;font-size:16px;font-weight:500;line-height:1.4;margin:0 0 10px;padding:0 0 10px;border-bottom:1px solid rgba(0,0,0,.1);float:left;width:100%;text-align:center}[id^=NotiflixReportWrap]>*>p{word-break:break-all;word-break:break-word;font-family:inherit!important;font-size:13px;line-height:1.4;font-weight:normal;float:left;width:100%;padding:0 10px;margin:0 0 10px}[id^=NotiflixReportWrap] a#NXReportButton{word-break:break-all;word-break:break-word;-webkit-user-select:none;-moz-user-select:none;-ms-user-select:none;user-select:none;font-family:inherit!important;-webkit-transition:all .25s ease-in-out;-o-transition:all .25s ease-in-out;transition:all .25s ease-in-out;cursor:pointer;float:right;padding:7px 17px;background:#32c682;font-size:14px;line-height:1.4;font-weight:500;border-radius:inherit!important;color:#fff}[id^=NotiflixReportWrap] a#NXReportButton:hover{box-shadow:inset 0 -60px 5px -5px rgba(0,0,0,.25)}[id^=NotiflixReportWrap].rtl-on a#NXReportButton{float:left}[id^=NotiflixReportWrap]>div[class*=\"-overlay\"].with-animation{-webkit-animation:report-overlay-animation .3s ease-in-out 0s normal;animation:report-overlay-animation .3s ease-in-out 0s normal}@-webkit-keyframes report-overlay-animation{0%{opacity:0}100%{opacity:1}}@keyframes report-overlay-animation{0%{opacity:0}100%{opacity:1}}[id^=NotiflixReportWrap]>div[class*=\"-content\"].with-animation.nx-fade{-webkit-animation:report-animation-fade .3s ease-in-out 0s normal;animation:report-animation-fade .3s ease-in-out 0s normal}@-webkit-keyframes report-animation-fade{0%{opacity:0}100%{opacity:1}}@keyframes report-animation-fade{0%{opacity:0}100%{opacity:1}}[id^=NotiflixReportWrap]>div[class*=\"-content\"].with-animation.nx-zoom{-webkit-animation:report-animation-zoom .3s ease-in-out 0s normal;animation:report-animation-zoom .3s ease-in-out 0s normal}@-webkit-keyframes report-animation-zoom{0%{opacity:0;-webkit-transform:scale(.5);transform:scale(.5)}50%{opacity:1;-webkit-transform:scale(1.05);transform:scale(1.05)}100%{opacity:1;-webkit-transform:scale(1);transform:scale(1)}}@keyframes report-animation-zoom{0%{opacity:0;-webkit-transform:scale(.5);transform:scale(.5)}50%{opacity:1;-webkit-transform:scale(1.05);transform:scale(1.05)}100%{opacity:1;-webkit-transform:scale(1);transform:scale(1)}}[id^=NotiflixReportWrap].remove>div[class*=\"-overlay\"].with-animation{opacity:0;-webkit-animation:report-overlay-animation-remove .3s ease-in-out 0s normal;animation:report-overlay-animation-remove .3s ease-in-out 0s normal}@-webkit-keyframes report-overlay-animation-remove{0%{opacity:1}100%{opacity:0}}@keyframes report-overlay-animation-remove{0%{opacity:1}100%{opacity:0}}[id^=NotiflixReportWrap].remove>div[class*=\"-content\"].with-animation.nx-fade{opacity:0;-webkit-animation:report-animation-fade-remove .3s ease-in-out 0s normal;animation:report-animation-fade-remove .3s ease-in-out 0s normal}@-webkit-keyframes report-animation-fade-remove{0%{opacity:1}100%{opacity:0}}@keyframes report-animation-fade-remove{0%{opacity:1}100%{opacity:0}}[id^=NotiflixReportWrap].remove>div[class*=\"-content\"].with-animation.nx-zoom{opacity:0;-webkit-animation:report-animation-zoom-remove .3s ease-in-out 0s normal;animation:report-animation-zoom-remove .3s ease-in-out 0s normal}@-webkit-keyframes report-animation-zoom-remove{0%{opacity:1;-webkit-transform:scale(1);transform:scale(1)}50%{opacity:.5;-webkit-transform:scale(1.05);transform:scale(1.05)}100%{opacity:0;-webkit-transform:scale(0);transform:scale(0)}}@keyframes report-animation-zoom-remove{0%{opacity:1;-webkit-transform:scale(1);transform:scale(1)}50%{opacity:.5;-webkit-transform:scale(1.05);transform:scale(1.05)}100%{opacity:0;-webkit-transform:scale(0);transform:scale(0)}}[id^=NotiflixConfirmWrap]{position:fixed;z-index:4003;width:100%;height:100%;left:0;top:0;padding:10px;-webkit-box-sizing:border-box;box-sizing:border-box;background:transparent;font-family:\"Quicksand\",-apple-system,BlinkMacSystemFont,\"Segoe UI\",Roboto,\"Helvetica Neue\",Arial,sans-serif;display:-webkit-box;display:-webkit-flex;display:-ms-flexbox;display:flex;-webkit-flex-wrap:wrap;-ms-flex-wrap:wrap;flex-wrap:wrap;-webkit-box-orient:vertical;-webkit-box-direction:normal;-webkit-flex-direction:column;-ms-flex-direction:column;flex-direction:column;-webkit-box-align:center;-webkit-align-items:center;-ms-flex-align:center;align-items:center;-webkit-box-pack:center;-webkit-justify-content:center;-ms-flex-pack:center;justify-content:center}[id^=NotiflixConfirmWrap].nx-position-center-top{-webkit-box-pack:start;-webkit-justify-content:flex-start;-ms-flex-pack:start;justify-content:flex-start}[id^=NotiflixConfirmWrap].nx-position-center-bottom{-webkit-box-pack:end;-webkit-justify-content:flex-end;-ms-flex-pack:end;justify-content:flex-end}[id^=NotiflixConfirmWrap].nx-position-left-top{-webkit-box-align:start;-webkit-align-items:flex-start;-ms-flex-align:start;align-items:flex-start;-webkit-box-pack:start;-webkit-justify-content:flex-start;-ms-flex-pack:start;justify-content:flex-start}[id^=NotiflixConfirmWrap].nx-position-left-center{-webkit-box-align:start;-webkit-align-items:flex-start;-ms-flex-align:start;align-items:flex-start}[id^=NotiflixConfirmWrap].nx-position-left-bottom{-webkit-box-align:start;-webkit-align-items:flex-start;-ms-flex-align:start;align-items:flex-start;-webkit-box-pack:end;-webkit-justify-content:flex-end;-ms-flex-pack:end;justify-content:flex-end}[id^=NotiflixConfirmWrap].nx-position-right-top{-webkit-box-align:end;-webkit-align-items:flex-end;-ms-flex-align:end;align-items:flex-end;-webkit-box-pack:start;-webkit-justify-content:flex-start;-ms-flex-pack:start;justify-content:flex-start}[id^=NotiflixConfirmWrap].nx-position-right-center{-webkit-box-align:end;-webkit-align-items:flex-end;-ms-flex-align:end;align-items:flex-end}[id^=NotiflixConfirmWrap].nx-position-right-bottom{-webkit-box-align:end;-webkit-align-items:flex-end;-ms-flex-align:end;align-items:flex-end;-webkit-box-pack:end;-webkit-justify-content:flex-end;-ms-flex-pack:end;justify-content:flex-end}[id^=NotiflixConfirmWrap] *{-webkit-box-sizing:border-box;box-sizing:border-box}[id^=NotiflixConfirmWrap]>div[class*=\"-overlay\"]{width:100%;height:100%;left:0;top:0;background:rgba(255,255,255,.5);position:fixed;z-index:0}[id^=NotiflixConfirmWrap]>div[class*=\"-overlay\"].with-animation{-webkit-animation:confirm-overlay-animation .3s ease-in-out 0s normal;animation:confirm-overlay-animation .3s ease-in-out 0s normal}@-webkit-keyframes confirm-overlay-animation{0%{opacity:0}100%{opacity:1}}@keyframes confirm-overlay-animation{0%{opacity:0}100%{opacity:1}}[id^=NotiflixConfirmWrap].remove>div[class*=\"-overlay\"].with-animation{opacity:0;-webkit-animation:confirm-overlay-animation-remove .3s ease-in-out 0s normal;animation:confirm-overlay-animation-remove .3s ease-in-out 0s normal}@-webkit-keyframes confirm-overlay-animation-remove{0%{opacity:1}100%{opacity:0}}@keyframes confirm-overlay-animation-remove{0%{opacity:1}100%{opacity:0}}[id^=NotiflixConfirmWrap]>div[class*=\"-content\"]{width:300px;max-width:100%;max-height:96vh;overflow-x:hidden;overflow-y:auto;border-radius:25px;padding:10px;margin:0;-webkit-filter:drop-shadow(0 0 5px rgba(0, 0, 0, .05));filter:drop-shadow(0 0 5px rgba(0, 0, 0, .05));background:#f8f8f8;color:#1e1e1e;position:relative;z-index:1;text-align:center}[id^=NotiflixConfirmWrap]>div[class*=\"-content\"]::-webkit-scrollbar{width:0;height:0}[id^=NotiflixConfirmWrap]>div[class*=\"-content\"]::-webkit-scrollbar-thumb{background:transparent}[id^=NotiflixConfirmWrap]>div[class*=\"-content\"]::-webkit-scrollbar-track{background:transparent}[id^=NotiflixConfirmWrap]>div[class*=\"-content\"]>div[class*=\"-head\"]{float:left;width:100%;text-align:inherit}[id^=NotiflixConfirmWrap]>div[class*=\"-content\"]>div[class*=\"-head\"]>h5{float:left;width:100%;margin:0;padding:0 0 10px;border-bottom:1px solid rgba(0,0,0,.1);color:#32c682;font-family:inherit!important;font-size:16px;line-height:1.4;font-weight:500;text-align:inherit}[id^=NotiflixConfirmWrap]>div[class*=\"-content\"]>div[class*=\"-head\"]>div{font-family:inherit!important;margin:15px 0 20px;padding:0 10px;float:left;width:100%;font-size:14px;line-height:1.4;font-weight:normal;color:inherit;text-align:inherit}[id^=NotiflixConfirmWrap]>div[class*=\"-content\"]>div[class*=\"-head\"]>div>div{font-family:inherit!important;float:left;width:100%;margin:15px 0 0;padding:0}[id^=NotiflixConfirmWrap]>div[class*=\"-content\"]>div[class*=\"-head\"]>div>div>input{font-family:inherit!important;float:left;width:100%;height:40px;margin:0;padding:0 15px;border:1px solid rgba(0,0,0,.1);border-radius:25px;font-size:14px;font-weight:normal;line-height:1;-webkit-transition:all .25s ease-in-out;-o-transition:all .25s ease-in-out;transition:all .25s ease-in-out;text-align:left}[id^=NotiflixConfirmWrap].rtl-on>div[class*=\"-content\"]>div[class*=\"-head\"]>div>div>input{text-align:right}[id^=NotiflixConfirmWrap]>div[class*=\"-content\"]>div[class*=\"-head\"]>div>div>input:hover{border-color:rgba(0,0,0,.1)}[id^=NotiflixConfirmWrap]>div[class*=\"-content\"]>div[class*=\"-head\"]>div>div>input:focus{border-color:rgba(0,0,0,.3)}[id^=NotiflixConfirmWrap]>div[class*=\"-content\"]>div[class*=\"-head\"]>div>div>input.nx-validation-failure{border-color:#ff5549}[id^=NotiflixConfirmWrap]>div[class*=\"-content\"]>div[class*=\"-head\"]>div>div>input.nx-validation-success{border-color:#32c682}[id^=NotiflixConfirmWrap]>div[class*=\"-content\"]>div[class*=\"-buttons\"]{-webkit-user-select:none;-moz-user-select:none;-ms-user-select:none;user-select:none;border-radius:inherit;float:left;width:100%;text-align:inherit}[id^=NotiflixConfirmWrap]>div[class*=\"-content\"]>div[class*=\"-buttons\"]>a{cursor:pointer;font-family:inherit!important;-webkit-transition:all .25s ease-in-out;-o-transition:all .25s ease-in-out;transition:all .25s ease-in-out;float:left;width:48%;padding:9px 5px;border-radius:inherit!important;font-weight:500;font-size:15px;line-height:1.4;color:#f8f8f8;text-align:inherit}[id^=NotiflixConfirmWrap]>div[class*=\"-content\"]>div[class*=\"-buttons\"]>a.confirm-button-ok{margin:0 2% 0 0;background:#32c682}[id^=NotiflixConfirmWrap]>div[class*=\"-content\"]>div[class*=\"-buttons\"]>a.confirm-button-cancel{margin:0 0 0 2%;background:#a9a9a9}[id^=NotiflixConfirmWrap]>div[class*=\"-content\"]>div[class*=\"-buttons\"]>a.full{margin:0;width:100%}[id^=NotiflixConfirmWrap]>div[class*=\"-content\"]>div[class*=\"-buttons\"]>a:hover{box-shadow:inset 0 -60px 5px -5px rgba(0,0,0,.25)}[id^=NotiflixConfirmWrap].rtl-on>div[class*=\"-content\"]>div[class*=\"-buttons\"],[id^=NotiflixConfirmWrap].rtl-on>div[class*=\"-content\"]>div[class*=\"-buttons\"]>a{-webkit-transform:rotateY(180deg);transform:rotateY(180deg)}[id^=NotiflixConfirmWrap].with-animation.nx-fade>div[class*=\"-content\"]{-webkit-animation:confirm-animation-fade .3s ease-in-out 0s normal;animation:confirm-animation-fade .3s ease-in-out 0s normal}@-webkit-keyframes confirm-animation-fade{0%{opacity:0}100%{opacity:1}}@keyframes confirm-animation-fade{0%{opacity:0}100%{opacity:1}}[id^=NotiflixConfirmWrap].with-animation.nx-zoom>div[class*=\"-content\"]{-webkit-animation:confirm-animation-zoom .3s ease-in-out 0s normal;animation:confirm-animation-zoom .3s ease-in-out 0s normal}@-webkit-keyframes confirm-animation-zoom{0%{opacity:0;-webkit-transform:scale(.5);transform:scale(.5)}50%{opacity:1;-webkit-transform:scale(1.05);transform:scale(1.05)}100%{opacity:1;-webkit-transform:scale(1);transform:scale(1)}}@keyframes confirm-animation-zoom{0%{opacity:0;-webkit-transform:scale(.5);transform:scale(.5)}50%{opacity:1;-webkit-transform:scale(1.05);transform:scale(1.05)}100%{opacity:1;-webkit-transform:scale(1);transform:scale(1)}}[id^=NotiflixConfirmWrap].with-animation.nx-fade.remove>div[class*=\"-content\"]{opacity:0;-webkit-animation:confirm-animation-fade-remove .3s ease-in-out 0s normal;animation:confirm-animation-fade-remove .3s ease-in-out 0s normal}@-webkit-keyframes confirm-animation-fade-remove{0%{opacity:1}100%{opacity:0}}@keyframes confirm-animation-fade-remove{0%{opacity:1}100%{opacity:0}}[id^=NotiflixConfirmWrap].with-animation.nx-zoom.remove>div[class*=\"-content\"]{opacity:0;-webkit-animation:confirm-animation-zoom-remove .3s ease-in-out 0s normal;animation:confirm-animation-zoom-remove .3s ease-in-out 0s normal}@-webkit-keyframes confirm-animation-zoom-remove{0%{opacity:1;-webkit-transform:scale(1);transform:scale(1)}50%{opacity:.5;-webkit-transform:scale(1.05);transform:scale(1.05)}100%{opacity:0;-webkit-transform:scale(0);transform:scale(0)}}@keyframes confirm-animation-zoom-remove{0%{opacity:1;-webkit-transform:scale(1);transform:scale(1)}50%{opacity:.5;-webkit-transform:scale(1.05);transform:scale(1.05)}100%{opacity:0;-webkit-transform:scale(0);transform:scale(0)}}[id^=NotiflixLoadingWrap]{-webkit-user-select:none;-moz-user-select:none;-ms-user-select:none;user-select:none;position:fixed;z-index:4000;width:100%;height:100%;left:0;top:0;right:0;bottom:0;margin:auto;display:-webkit-box;display:-webkit-flex;display:-ms-flexbox;display:flex;-webkit-flex-wrap:wrap;-ms-flex-wrap:wrap;flex-wrap:wrap;-webkit-box-orient:vertical;-webkit-box-direction:normal;-webkit-flex-direction:column;-ms-flex-direction:column;flex-direction:column;-webkit-box-align:center;-webkit-align-items:center;-ms-flex-align:center;align-items:center;-webkit-box-pack:center;-webkit-justify-content:center;-ms-flex-pack:center;justify-content:center;text-align:center;-webkit-box-sizing:border-box;box-sizing:border-box;background:rgba(0,0,0,.8);font-family:\"Quicksand\",-apple-system,BlinkMacSystemFont,\"Segoe UI\",Roboto,\"Helvetica Neue\",Arial,sans-serif}[id^=NotiflixLoadingWrap] *{-webkit-box-sizing:border-box;box-sizing:border-box}[id^=NotiflixLoadingWrap].click-to-close{cursor:pointer}[id^=NotiflixLoadingWrap]>div[class*=\"-icon\"]{width:60px;height:60px;position:relative;-webkit-transition:top .2s ease-in-out;-o-transition:top .2s ease-in-out;transition:top .2s ease-in-out;margin:0 auto}[id^=NotiflixLoadingWrap]>div[class*=\"-icon\"] img,[id^=NotiflixLoadingWrap]>div[class*=\"-icon\"] svg{max-width:unset;max-height:unset;width:100%;height:100%;position:absolute;left:0;top:0}[id^=NotiflixLoadingWrap]>p{position:relative;margin:10px auto 0;font-family:inherit!important;font-weight:normal;font-size:15px;line-height:1.4;padding:0 10px;width:100%;text-align:center}[id^=NotiflixLoadingWrap].with-animation{-webkit-animation:loading-animation-fade .3s ease-in-out 0s normal;animation:loading-animation-fade .3s ease-in-out 0s normal}@-webkit-keyframes loading-animation-fade{0%{opacity:0}100%{opacity:1}}@keyframes loading-animation-fade{0%{opacity:0}100%{opacity:1}}[id^=NotiflixLoadingWrap].with-animation.remove{opacity:0;-webkit-animation:loading-animation-fade-remove .3s ease-in-out 0s normal;animation:loading-animation-fade-remove .3s ease-in-out 0s normal}@-webkit-keyframes loading-animation-fade-remove{0%{opacity:1}100%{opacity:0}}@keyframes loading-animation-fade-remove{0%{opacity:1}100%{opacity:0}}[id^=NotiflixLoadingWrap]>p.new{-webkit-animation:loading-new-message-fade .3s ease-in-out 0s normal;animation:loading-new-message-fade .3s ease-in-out 0s normal}@-webkit-keyframes loading-new-message-fade{0%{opacity:0}100%{opacity:1}}@keyframes loading-new-message-fade{0%{opacity:0}100%{opacity:1}}[id^=NotiflixBlockWrap]{-webkit-user-select:none;-moz-user-select:none;-ms-user-select:none;user-select:none;-webkit-box-sizing:border-box;box-sizing:border-box;position:absolute;z-index:1000;font-family:\"Quicksand\",-apple-system,BlinkMacSystemFont,\"Segoe UI\",Roboto,\"Helvetica Neue\",Arial,sans-serif;background:rgba(255,255,255,.9);text-align:center;animation-duration:.4s;width:100%;height:100%;left:0;top:0;border-radius:inherit;display:-webkit-box;display:-webkit-flex;display:-ms-flexbox;display:flex;-webkit-flex-wrap:wrap;-ms-flex-wrap:wrap;flex-wrap:wrap;-webkit-box-orient:vertical;-webkit-box-direction:normal;-webkit-flex-direction:column;-ms-flex-direction:column;flex-direction:column;-webkit-box-align:center;-webkit-align-items:center;-ms-flex-align:center;align-items:center;-webkit-box-pack:center;-webkit-justify-content:center;-ms-flex-pack:center;justify-content:center}[id^=NotiflixBlockWrap] *{-webkit-box-sizing:border-box;box-sizing:border-box}[id^=NotiflixBlockWrap]>span[class*=\"-icon\"]{display:block;width:45px;height:45px;position:relative;margin:0 auto}[id^=NotiflixBlockWrap]>span[class*=\"-icon\"] svg{width:inherit;height:inherit}[id^=NotiflixBlockWrap]>span[class*=\"-message\"]{position:relative;display:block;width:100%;margin:10px auto 0;padding:0 10px;font-family:inherit!important;font-weight:normal;font-size:14px;line-height:1.4}[id^=NotiflixBlockWrap].with-animation{-webkit-animation:block-animation-fade .3s ease-in-out 0s normal;animation:block-animation-fade .3s ease-in-out 0s normal}@-webkit-keyframes block-animation-fade{0%{opacity:0}100%{opacity:1}}@keyframes block-animation-fade{0%{opacity:0}100%{opacity:1}}[id^=NotiflixBlockWrap].with-animation.remove{opacity:0;-webkit-animation:block-animation-fade-remove .3s ease-in-out 0s normal;animation:block-animation-fade-remove .3s ease-in-out 0s normal}@-webkit-keyframes block-animation-fade-remove{0%{opacity:1}100%{opacity:0}}@keyframes block-animation-fade-remove{0%{opacity:1}100%{opacity:0}}"},u=function(){if(null!==b()&&!t.document.getElementById("NotiflixInternalCSS")){if(!g("head"))return!1;var e=t.document.createElement("style");e.id="NotiflixInternalCSS",e.innerHTML=b(),t.document.head.appendChild(e)}},y=function(){var t={},e=!1,a=0;"[object Boolean]"===Object.prototype.toString.call(arguments[0])&&(e=arguments[0],a++);for(var o=function(i){for(var a in i)Object.prototype.hasOwnProperty.call(i,a)&&(t[a]=e&&"[object Object]"===Object.prototype.toString.call(i[a])?y(t[a],i[a]):i[a])};a<arguments.length;a++)o(arguments[a]);return t},k=function(e){var i=t.document.createElement("div");return i.innerHTML=e,i.textContent||i.innerText||""},w=function(e,i){if(!t.document.getElementById("NotiflixQuicksand")&&e&&"string"==typeof i&&"quicksand"===i.toLocaleLowerCase("en")){if(!g("head"))return!1;var a=t.document.createRange();a.selectNode(t.document.head);var o=a.createContextualFragment("<link id=\"NotiflixGoogleDNS\" rel=\"dns-prefetch\" href=\"//fonts.googleapis.com\" />");t.document.head.appendChild(o);var n=t.document.createRange();n.selectNode(t.document.head);var r=n.createContextualFragment("<link id=\"NotiflixQuicksand\" href=\"https://fonts.googleapis.com/css?family=Quicksand:300,400,500,700&amp;subset=latin-ext\" rel=\"stylesheet\" />");t.document.head.appendChild(r)}},h=function(t,e){t||(t="110px"),e||(e="#32c682");var i="<svg xmlns=\"http://www.w3.org/2000/svg\" id=\"NXReportSuccess\" width=\""+t+"\" height=\""+t+"\" fill=\""+e+"\" fill-rule=\"evenodd\" clip-rule=\"evenodd\" image-rendering=\"optimizeQuality\" shape-rendering=\"geometricPrecision\" text-rendering=\"geometricPrecision\" version=\"1.1\" viewBox=\"0 0 120 120\" xml:space=\"preserve\"><style>@-webkit-keyframes NXReportSuccess5-animation{0%{-webkit-transform:translate(60px,57.7px) scale(.5,.5) translate(-60px,-57.7px);transform:translate(60px,57.7px) scale(.5,.5) translate(-60px,-57.7px)}50%,to{-webkit-transform:translate(60px,57.7px) scale(1,1) translate(-60px,-57.7px);transform:translate(60px,57.7px) scale(1,1) translate(-60px,-57.7px)}60%{-webkit-transform:translate(60px,57.7px) scale(.95,.95) translate(-60px,-57.7px);transform:translate(60px,57.7px) scale(.95,.95) translate(-60px,-57.7px)}}@keyframes NXReportSuccess5-animation{0%{-webkit-transform:translate(60px,57.7px) scale(.5,.5) translate(-60px,-57.7px);transform:translate(60px,57.7px) scale(.5,.5) translate(-60px,-57.7px)}50%,to{-webkit-transform:translate(60px,57.7px) scale(1,1) translate(-60px,-57.7px);transform:translate(60px,57.7px) scale(1,1) translate(-60px,-57.7px)}60%{-webkit-transform:translate(60px,57.7px) scale(.95,.95) translate(-60px,-57.7px);transform:translate(60px,57.7px) scale(.95,.95) translate(-60px,-57.7px)}}@-webkit-keyframes NXReportSuccess6-animation{0%{opacity:0}50%,to{opacity:1}}@keyframes NXReportSuccess6-animation{0%{opacity:0}50%,to{opacity:1}}@-webkit-keyframes NXReportSuccess4-animation{0%{opacity:0}40%,to{opacity:1}}@keyframes NXReportSuccess4-animation{0%{opacity:0}40%,to{opacity:1}}@-webkit-keyframes NXReportSuccess3-animation{0%{-webkit-transform:translate(60px,60px) scale(.5,.5) translate(-60px,-60px);transform:translate(60px,60px) scale(.5,.5) translate(-60px,-60px)}40%,to{-webkit-transform:translate(60px,60px) scale(1,1) translate(-60px,-60px);transform:translate(60px,60px) scale(1,1) translate(-60px,-60px)}60%{-webkit-transform:translate(60px,60px) scale(.95,.95) translate(-60px,-60px);transform:translate(60px,60px) scale(.95,.95) translate(-60px,-60px)}}@keyframes NXReportSuccess3-animation{0%{-webkit-transform:translate(60px,60px) scale(.5,.5) translate(-60px,-60px);transform:translate(60px,60px) scale(.5,.5) translate(-60px,-60px)}40%,to{-webkit-transform:translate(60px,60px) scale(1,1) translate(-60px,-60px);transform:translate(60px,60px) scale(1,1) translate(-60px,-60px)}60%{-webkit-transform:translate(60px,60px) scale(.95,.95) translate(-60px,-60px);transform:translate(60px,60px) scale(.95,.95) translate(-60px,-60px)}}#NXReportSuccess *{-webkit-animation-duration:1.2s;animation-duration:1.2s;-webkit-animation-timing-function:cubic-bezier(0,0,1,1);animation-timing-function:cubic-bezier(0,0,1,1)}</style><g id=\"NXReportSuccess1\"><g id=\"NXReportSuccess2\"><g style=\"-webkit-animation-name:NXReportSuccess3-animation;animation-name:NXReportSuccess3-animation;-webkit-transform:translate(60px,60px) scale(1,1) translate(-60px,-60px);-webkit-animation-timing-function:cubic-bezier(.42,0,.58,1);animation-timing-function:cubic-bezier(.42,0,.58,1)\"><path d=\"M60 115.38C29.46 115.38 4.62 90.54 4.62 60 4.62 29.46 29.46 4.62 60 4.62c30.54 0 55.38 24.84 55.38 55.38 0 30.54-24.84 55.38-55.38 55.38zM60 0C26.92 0 0 26.92 0 60s26.92 60 60 60 60-26.92 60-60S93.08 0 60 0z\" style=\"-webkit-animation-name:NXReportSuccess4-animation;animation-name:NXReportSuccess4-animation;-webkit-animation-timing-function:cubic-bezier(.42,0,.58,1);animation-timing-function:cubic-bezier(.42,0,.58,1)\" fill=\"inherit\" data-animator-group=\"true\" data-animator-type=\"2\"/></g><g style=\"-webkit-animation-name:NXReportSuccess5-animation;animation-name:NXReportSuccess5-animation;-webkit-transform:translate(60px,57.7px) scale(1,1) translate(-60px,-57.7px);-webkit-animation-timing-function:cubic-bezier(.42,0,.58,1);animation-timing-function:cubic-bezier(.42,0,.58,1)\"><path d=\"M88.27 35.39L52.8 75.29 31.43 58.2c-.98-.81-2.44-.63-3.24.36-.79.99-.63 2.44.36 3.24l23.08 18.46c.43.34.93.51 1.44.51.64 0 1.27-.26 1.74-.78l36.91-41.53a2.3 2.3 0 0 0-.19-3.26c-.95-.86-2.41-.77-3.26.19z\" style=\"-webkit-animation-name:NXReportSuccess6-animation;animation-name:NXReportSuccess6-animation;-webkit-animation-timing-function:cubic-bezier(.42,0,.58,1);animation-timing-function:cubic-bezier(.42,0,.58,1)\" fill=\"inherit\" data-animator-group=\"true\" data-animator-type=\"2\"/></g></g></g></svg>";return i},v=function(t,e){t||(t="110px"),e||(e="#ff5549");var i="<svg xmlns=\"http://www.w3.org/2000/svg\" id=\"NXReportFailure\" width=\""+t+"\" height=\""+t+"\" fill=\""+e+"\" fill-rule=\"evenodd\" clip-rule=\"evenodd\" image-rendering=\"optimizeQuality\" shape-rendering=\"geometricPrecision\" text-rendering=\"geometricPrecision\" version=\"1.1\" viewBox=\"0 0 120 120\" xml:space=\"preserve\"><style>@-webkit-keyframes NXReportFailure4-animation{0%{opacity:0}40%,to{opacity:1}}@keyframes NXReportFailure4-animation{0%{opacity:0}40%,to{opacity:1}}@-webkit-keyframes NXReportFailure3-animation{0%{-webkit-transform:translate(60px,60px) scale(.5,.5) translate(-60px,-60px);transform:translate(60px,60px) scale(.5,.5) translate(-60px,-60px)}40%,to{-webkit-transform:translate(60px,60px) scale(1,1) translate(-60px,-60px);transform:translate(60px,60px) scale(1,1) translate(-60px,-60px)}60%{-webkit-transform:translate(60px,60px) scale(.95,.95) translate(-60px,-60px);transform:translate(60px,60px) scale(.95,.95) translate(-60px,-60px)}}@keyframes NXReportFailure3-animation{0%{-webkit-transform:translate(60px,60px) scale(.5,.5) translate(-60px,-60px);transform:translate(60px,60px) scale(.5,.5) translate(-60px,-60px)}40%,to{-webkit-transform:translate(60px,60px) scale(1,1) translate(-60px,-60px);transform:translate(60px,60px) scale(1,1) translate(-60px,-60px)}60%{-webkit-transform:translate(60px,60px) scale(.95,.95) translate(-60px,-60px);transform:translate(60px,60px) scale(.95,.95) translate(-60px,-60px)}}@-webkit-keyframes NXReportFailure5-animation{0%{-webkit-transform:translate(60px,60px) scale(.5,.5) translate(-60px,-60px);transform:translate(60px,60px) scale(.5,.5) translate(-60px,-60px)}50%,to{-webkit-transform:translate(60px,60px) scale(1,1) translate(-60px,-60px);transform:translate(60px,60px) scale(1,1) translate(-60px,-60px)}60%{-webkit-transform:translate(60px,60px) scale(.95,.95) translate(-60px,-60px);transform:translate(60px,60px) scale(.95,.95) translate(-60px,-60px)}}@keyframes NXReportFailure5-animation{0%{-webkit-transform:translate(60px,60px) scale(.5,.5) translate(-60px,-60px);transform:translate(60px,60px) scale(.5,.5) translate(-60px,-60px)}50%,to{-webkit-transform:translate(60px,60px) scale(1,1) translate(-60px,-60px);transform:translate(60px,60px) scale(1,1) translate(-60px,-60px)}60%{-webkit-transform:translate(60px,60px) scale(.95,.95) translate(-60px,-60px);transform:translate(60px,60px) scale(.95,.95) translate(-60px,-60px)}}@-webkit-keyframes NXReportFailure6-animation{0%{opacity:0}50%,to{opacity:1}}@keyframes NXReportFailure6-animation{0%{opacity:0}50%,to{opacity:1}}#NXReportFailure *{-webkit-animation-duration:1.2s;animation-duration:1.2s;-webkit-animation-timing-function:cubic-bezier(0,0,1,1);animation-timing-function:cubic-bezier(0,0,1,1)}</style><g id=\"NXReportFailure1\"><g id=\"NXReportFailure2\"><g style=\"-webkit-animation-name:NXReportFailure3-animation;animation-name:NXReportFailure3-animation;-webkit-animation-timing-function:cubic-bezier(.42,0,.58,1);animation-timing-function:cubic-bezier(.42,0,.58,1);-webkit-transform:translate(60px,60px) scale(1,1) translate(-60px,-60px)\"><path d=\"M4.35 34.95c0-16.82 13.78-30.6 30.6-30.6h50.1c16.82 0 30.6 13.78 30.6 30.6v50.1c0 16.82-13.78 30.6-30.6 30.6h-50.1c-16.82 0-30.6-13.78-30.6-30.6v-50.1zM34.95 120h50.1c19.22 0 34.95-15.73 34.95-34.95v-50.1C120 15.73 104.27 0 85.05 0h-50.1C15.73 0 0 15.73 0 34.95v50.1C0 104.27 15.73 120 34.95 120z\" style=\"-webkit-animation-name:NXReportFailure4-animation;animation-name:NXReportFailure4-animation;-webkit-animation-timing-function:cubic-bezier(.42,0,.58,1);animation-timing-function:cubic-bezier(.42,0,.58,1)\" fill=\"inherit\" data-animator-group=\"true\" data-animator-type=\"2\"/></g><g style=\"-webkit-animation-name:NXReportFailure5-animation;animation-name:NXReportFailure5-animation;-webkit-animation-timing-function:cubic-bezier(.42,0,.58,1);animation-timing-function:cubic-bezier(.42,0,.58,1);-webkit-transform:translate(60px,60px) scale(1,1) translate(-60px,-60px)\"><path d=\"M82.4 37.6c-.9-.9-2.37-.9-3.27 0L60 56.73 40.86 37.6a2.306 2.306 0 0 0-3.26 3.26L56.73 60 37.6 79.13c-.9.9-.9 2.37 0 3.27.45.45 1.04.68 1.63.68.59 0 1.18-.23 1.63-.68L60 63.26 79.13 82.4c.45.45 1.05.68 1.64.68.58 0 1.18-.23 1.63-.68.9-.9.9-2.37 0-3.27L63.26 60 82.4 40.86c.9-.91.9-2.36 0-3.26z\" style=\"-webkit-animation-name:NXReportFailure6-animation;animation-name:NXReportFailure6-animation;-webkit-animation-timing-function:cubic-bezier(.42,0,.58,1);animation-timing-function:cubic-bezier(.42,0,.58,1)\" fill=\"inherit\" data-animator-group=\"true\" data-animator-type=\"2\"/></g></g></g></svg>";return i},N=function(t,e){t||(t="110px"),e||(e="#eebf31");var i="<svg xmlns=\"http://www.w3.org/2000/svg\" id=\"NXReportWarning\" width=\""+t+"\" height=\""+t+"\" fill=\""+e+"\" fill-rule=\"evenodd\" clip-rule=\"evenodd\" image-rendering=\"optimizeQuality\" shape-rendering=\"geometricPrecision\" text-rendering=\"geometricPrecision\" version=\"1.1\" viewBox=\"0 0 120 120\" xml:space=\"preserve\"><style>@-webkit-keyframes NXReportWarning3-animation{0%{opacity:0}40%,to{opacity:1}}@keyframes NXReportWarning3-animation{0%{opacity:0}40%,to{opacity:1}}@-webkit-keyframes NXReportWarning2-animation{0%{-webkit-transform:translate(60px,60px) scale(.5,.5) translate(-60px,-60px);transform:translate(60px,60px) scale(.5,.5) translate(-60px,-60px)}40%,to{-webkit-transform:translate(60px,60px) scale(1,1) translate(-60px,-60px);transform:translate(60px,60px) scale(1,1) translate(-60px,-60px)}60%{-webkit-transform:translate(60px,60px) scale(.95,.95) translate(-60px,-60px);transform:translate(60px,60px) scale(.95,.95) translate(-60px,-60px)}}@keyframes NXReportWarning2-animation{0%{-webkit-transform:translate(60px,60px) scale(.5,.5) translate(-60px,-60px);transform:translate(60px,60px) scale(.5,.5) translate(-60px,-60px)}40%,to{-webkit-transform:translate(60px,60px) scale(1,1) translate(-60px,-60px);transform:translate(60px,60px) scale(1,1) translate(-60px,-60px)}60%{-webkit-transform:translate(60px,60px) scale(.95,.95) translate(-60px,-60px);transform:translate(60px,60px) scale(.95,.95) translate(-60px,-60px)}}@-webkit-keyframes NXReportWarning4-animation{0%{-webkit-transform:translate(60px,66.6px) scale(.5,.5) translate(-60px,-66.6px);transform:translate(60px,66.6px) scale(.5,.5) translate(-60px,-66.6px)}50%,to{-webkit-transform:translate(60px,66.6px) scale(1,1) translate(-60px,-66.6px);transform:translate(60px,66.6px) scale(1,1) translate(-60px,-66.6px)}60%{-webkit-transform:translate(60px,66.6px) scale(.95,.95) translate(-60px,-66.6px);transform:translate(60px,66.6px) scale(.95,.95) translate(-60px,-66.6px)}}@keyframes NXReportWarning4-animation{0%{-webkit-transform:translate(60px,66.6px) scale(.5,.5) translate(-60px,-66.6px);transform:translate(60px,66.6px) scale(.5,.5) translate(-60px,-66.6px)}50%,to{-webkit-transform:translate(60px,66.6px) scale(1,1) translate(-60px,-66.6px);transform:translate(60px,66.6px) scale(1,1) translate(-60px,-66.6px)}60%{-webkit-transform:translate(60px,66.6px) scale(.95,.95) translate(-60px,-66.6px);transform:translate(60px,66.6px) scale(.95,.95) translate(-60px,-66.6px)}}@-webkit-keyframes NXReportWarning5-animation{0%{opacity:0}50%,to{opacity:1}}@keyframes NXReportWarning5-animation{0%{opacity:0}50%,to{opacity:1}}#NXReportWarning *{-webkit-animation-duration:1.2s;animation-duration:1.2s;-webkit-animation-timing-function:cubic-bezier(0,0,1,1);animation-timing-function:cubic-bezier(0,0,1,1)}</style><g id=\"NXReportWarning1\"><g style=\"-webkit-animation-name:NXReportWarning2-animation;animation-name:NXReportWarning2-animation;-webkit-animation-timing-function:cubic-bezier(.42,0,.58,1);animation-timing-function:cubic-bezier(.42,0,.58,1);-webkit-transform:translate(60px,60px) scale(1,1) translate(-60px,-60px)\"><path d=\"M115.46 106.15l-54.04-93.8c-.61-1.06-2.23-1.06-2.84 0l-54.04 93.8c-.62 1.07.21 2.29 1.42 2.29h108.08c1.21 0 2.04-1.22 1.42-2.29zM65.17 10.2l54.04 93.8c2.28 3.96-.65 8.78-5.17 8.78H5.96c-4.52 0-7.45-4.82-5.17-8.78l54.04-93.8c2.28-3.95 8.03-4 10.34 0z\" style=\"-webkit-animation-name:NXReportWarning3-animation;animation-name:NXReportWarning3-animation;-webkit-animation-timing-function:cubic-bezier(.42,0,.58,1);animation-timing-function:cubic-bezier(.42,0,.58,1)\" fill=\"inherit\" data-animator-group=\"true\" data-animator-type=\"2\"/></g><g style=\"-webkit-animation-name:NXReportWarning4-animation;animation-name:NXReportWarning4-animation;-webkit-animation-timing-function:cubic-bezier(.42,0,.58,1);animation-timing-function:cubic-bezier(.42,0,.58,1);-webkit-transform:translate(60px,66.6px) scale(1,1) translate(-60px,-66.6px)\"><path d=\"M57.83 94.01c0 1.2.97 2.17 2.17 2.17s2.17-.97 2.17-2.17v-3.2c0-1.2-.97-2.17-2.17-2.17s-2.17.97-2.17 2.17v3.2zm0-14.15c0 1.2.97 2.17 2.17 2.17s2.17-.97 2.17-2.17V39.21c0-1.2-.97-2.17-2.17-2.17s-2.17.97-2.17 2.17v40.65z\" style=\"-webkit-animation-name:NXReportWarning5-animation;animation-name:NXReportWarning5-animation;-webkit-animation-timing-function:cubic-bezier(.42,0,.58,1);animation-timing-function:cubic-bezier(.42,0,.58,1)\" fill=\"inherit\" data-animator-group=\"true\" data-animator-type=\"2\"/></g></g></svg>";return i},z=function(t,e){t||(t="110px"),e||(e="#26c0d3");var i="<svg xmlns=\"http://www.w3.org/2000/svg\" id=\"NXReportInfo\" width=\""+t+"\" height=\""+t+"\" fill=\""+e+"\" fill-rule=\"evenodd\" clip-rule=\"evenodd\" image-rendering=\"optimizeQuality\" shape-rendering=\"geometricPrecision\" text-rendering=\"geometricPrecision\" version=\"1.1\" viewBox=\"0 0 120 120\" xml:space=\"preserve\"><style>@-webkit-keyframes NXReportInfo5-animation{0%{opacity:0}50%,to{opacity:1}}@keyframes NXReportInfo5-animation{0%{opacity:0}50%,to{opacity:1}}@-webkit-keyframes NXReportInfo4-animation{0%{-webkit-transform:translate(60px,60px) scale(.5,.5) translate(-60px,-60px);transform:translate(60px,60px) scale(.5,.5) translate(-60px,-60px)}50%,to{-webkit-transform:translate(60px,60px) scale(1,1) translate(-60px,-60px);transform:translate(60px,60px) scale(1,1) translate(-60px,-60px)}60%{-webkit-transform:translate(60px,60px) scale(.95,.95) translate(-60px,-60px);transform:translate(60px,60px) scale(.95,.95) translate(-60px,-60px)}}@keyframes NXReportInfo4-animation{0%{-webkit-transform:translate(60px,60px) scale(.5,.5) translate(-60px,-60px);transform:translate(60px,60px) scale(.5,.5) translate(-60px,-60px)}50%,to{-webkit-transform:translate(60px,60px) scale(1,1) translate(-60px,-60px);transform:translate(60px,60px) scale(1,1) translate(-60px,-60px)}60%{-webkit-transform:translate(60px,60px) scale(.95,.95) translate(-60px,-60px);transform:translate(60px,60px) scale(.95,.95) translate(-60px,-60px)}}@-webkit-keyframes NXReportInfo3-animation{0%{opacity:0}40%,to{opacity:1}}@keyframes NXReportInfo3-animation{0%{opacity:0}40%,to{opacity:1}}@-webkit-keyframes NXReportInfo2-animation{0%{-webkit-transform:translate(60px,60px) scale(.5,.5) translate(-60px,-60px);transform:translate(60px,60px) scale(.5,.5) translate(-60px,-60px)}40%,to{-webkit-transform:translate(60px,60px) scale(1,1) translate(-60px,-60px);transform:translate(60px,60px) scale(1,1) translate(-60px,-60px)}60%{-webkit-transform:translate(60px,60px) scale(.95,.95) translate(-60px,-60px);transform:translate(60px,60px) scale(.95,.95) translate(-60px,-60px)}}@keyframes NXReportInfo2-animation{0%{-webkit-transform:translate(60px,60px) scale(.5,.5) translate(-60px,-60px);transform:translate(60px,60px) scale(.5,.5) translate(-60px,-60px)}40%,to{-webkit-transform:translate(60px,60px) scale(1,1) translate(-60px,-60px);transform:translate(60px,60px) scale(1,1) translate(-60px,-60px)}60%{-webkit-transform:translate(60px,60px) scale(.95,.95) translate(-60px,-60px);transform:translate(60px,60px) scale(.95,.95) translate(-60px,-60px)}}#NXReportInfo *{-webkit-animation-duration:1.2s;animation-duration:1.2s;-webkit-animation-timing-function:cubic-bezier(0,0,1,1);animation-timing-function:cubic-bezier(0,0,1,1)}</style><g id=\"NXReportInfo1\"><g style=\"-webkit-animation-name:NXReportInfo2-animation;animation-name:NXReportInfo2-animation;-webkit-animation-timing-function:cubic-bezier(.42,0,.58,1);animation-timing-function:cubic-bezier(.42,0,.58,1);-webkit-transform:translate(60px,60px) scale(1,1) translate(-60px,-60px)\"><path d=\"M60 115.38C29.46 115.38 4.62 90.54 4.62 60 4.62 29.46 29.46 4.62 60 4.62c30.54 0 55.38 24.84 55.38 55.38 0 30.54-24.84 55.38-55.38 55.38zM60 0C26.92 0 0 26.92 0 60s26.92 60 60 60 60-26.92 60-60S93.08 0 60 0z\" style=\"-webkit-animation-name:NXReportInfo3-animation;animation-name:NXReportInfo3-animation;-webkit-animation-timing-function:cubic-bezier(.42,0,.58,1);animation-timing-function:cubic-bezier(.42,0,.58,1)\" fill=\"inherit\" data-animator-group=\"true\" data-animator-type=\"2\"/></g><g style=\"-webkit-animation-name:NXReportInfo4-animation;animation-name:NXReportInfo4-animation;-webkit-animation-timing-function:cubic-bezier(.42,0,.58,1);animation-timing-function:cubic-bezier(.42,0,.58,1);-webkit-transform:translate(60px,60px) scale(1,1) translate(-60px,-60px)\"><path d=\"M57.75 43.85c0-1.24 1.01-2.25 2.25-2.25s2.25 1.01 2.25 2.25v48.18c0 1.24-1.01 2.25-2.25 2.25s-2.25-1.01-2.25-2.25V43.85zm0-15.88c0-1.24 1.01-2.25 2.25-2.25s2.25 1.01 2.25 2.25v3.32c0 1.25-1.01 2.25-2.25 2.25s-2.25-1-2.25-2.25v-3.32z\" style=\"-webkit-animation-name:NXReportInfo5-animation;animation-name:NXReportInfo5-animation;-webkit-animation-timing-function:cubic-bezier(.42,0,.58,1);animation-timing-function:cubic-bezier(.42,0,.58,1)\" fill=\"inherit\" data-animator-group=\"true\" data-animator-type=\"2\"/></g></g></svg>";return i},C=function(t,e){t||(t="60px"),e||(e="#32c682");var i="<svg xmlns=\"http://www.w3.org/2000/svg\" stroke=\""+e+"\" width=\""+t+"\" height=\""+t+"\" transform=\"scale(.8)\" viewBox=\"0 0 38 38\"><g fill=\"none\" fill-rule=\"evenodd\" stroke-width=\"2\" transform=\"translate(1 1)\"><circle cx=\"18\" cy=\"18\" r=\"18\" stroke-opacity=\".25\"/><path d=\"M36 18c0-9.94-8.06-18-18-18\"><animateTransform attributeName=\"transform\" dur=\"1s\" from=\"0 18 18\" repeatCount=\"indefinite\" to=\"360 18 18\" type=\"rotate\"/></path></g></svg>";return i},S=function(t,e){t||(t="60px"),e||(e="#32c682");var i="<svg xmlns=\"http://www.w3.org/2000/svg\" id=\"NXLoadingHourglass\" fill=\""+e+"\" width=\""+t+"\" height=\""+t+"\" fill-rule=\"evenodd\" clip-rule=\"evenodd\" image-rendering=\"optimizeQuality\" shape-rendering=\"geometricPrecision\" text-rendering=\"geometricPrecision\" version=\"1.1\" viewBox=\"0 0 200 200\" xml:space=\"preserve\"><style>@-webkit-keyframes NXhourglass5-animation{0%{-webkit-transform:scale(1,1);transform:scale(1,1)}16.67%{-webkit-transform:scale(1,.8);transform:scale(1,.8)}33.33%{-webkit-transform:scale(.88,.6);transform:scale(.88,.6)}37.5%{-webkit-transform:scale(.85,.55);transform:scale(.85,.55)}41.67%{-webkit-transform:scale(.8,.5);transform:scale(.8,.5)}45.83%{-webkit-transform:scale(.75,.45);transform:scale(.75,.45)}50%{-webkit-transform:scale(.7,.4);transform:scale(.7,.4)}54.17%{-webkit-transform:scale(.6,.35);transform:scale(.6,.35)}58.33%{-webkit-transform:scale(.5,.3);transform:scale(.5,.3)}83.33%,to{-webkit-transform:scale(.2,0);transform:scale(.2,0)}}@keyframes NXhourglass5-animation{0%{-webkit-transform:scale(1,1);transform:scale(1,1)}16.67%{-webkit-transform:scale(1,.8);transform:scale(1,.8)}33.33%{-webkit-transform:scale(.88,.6);transform:scale(.88,.6)}37.5%{-webkit-transform:scale(.85,.55);transform:scale(.85,.55)}41.67%{-webkit-transform:scale(.8,.5);transform:scale(.8,.5)}45.83%{-webkit-transform:scale(.75,.45);transform:scale(.75,.45)}50%{-webkit-transform:scale(.7,.4);transform:scale(.7,.4)}54.17%{-webkit-transform:scale(.6,.35);transform:scale(.6,.35)}58.33%{-webkit-transform:scale(.5,.3);transform:scale(.5,.3)}83.33%,to{-webkit-transform:scale(.2,0);transform:scale(.2,0)}}@-webkit-keyframes NXhourglass3-animation{0%{-webkit-transform:scale(1,.02);transform:scale(1,.02)}79.17%,to{-webkit-transform:scale(1,1);transform:scale(1,1)}}@keyframes NXhourglass3-animation{0%{-webkit-transform:scale(1,.02);transform:scale(1,.02)}79.17%,to{-webkit-transform:scale(1,1);transform:scale(1,1)}}@-webkit-keyframes NXhourglass1-animation{0%,83.33%{-webkit-transform:rotate(0deg);transform:rotate(0deg)}to{-webkit-transform:rotate(180deg);transform:rotate(180deg)}}@keyframes NXhourglass1-animation{0%,83.33%{-webkit-transform:rotate(0deg);transform:rotate(0deg)}to{-webkit-transform:rotate(180deg);transform:rotate(180deg)}}#NXLoadingHourglass *{-webkit-animation-duration:1.2s;animation-duration:1.2s;-webkit-animation-iteration-count:infinite;animation-iteration-count:infinite;-webkit-animation-timing-function:cubic-bezier(0,0,1,1);animation-timing-function:cubic-bezier(0,0,1,1)}</style><g data-animator-group=\"true\" data-animator-type=\"1\" style=\"-webkit-animation-name:NXhourglass1-animation;animation-name:NXhourglass1-animation;-webkit-transform-origin:50% 50%;transform-origin:50% 50%;transform-box:fill-box\"><g id=\"NXhourglass2\" fill=\"inherit\"><g data-animator-group=\"true\" data-animator-type=\"2\" style=\"-webkit-animation-name:NXhourglass3-animation;animation-name:NXhourglass3-animation;-webkit-animation-timing-function:cubic-bezier(.42,0,.58,1);animation-timing-function:cubic-bezier(.42,0,.58,1);-webkit-transform-origin:50% 100%;transform-origin:50% 100%;transform-box:fill-box\" opacity=\".4\"><path id=\"NXhourglass4\" d=\"M100 100l-34.38 32.08v31.14h68.76v-31.14z\"/></g><g data-animator-group=\"true\" data-animator-type=\"2\" style=\"-webkit-animation-name:NXhourglass5-animation;animation-name:NXhourglass5-animation;-webkit-transform-origin:50% 100%;transform-origin:50% 100%;transform-box:fill-box\" opacity=\".4\"><path id=\"NXhourglass6\" d=\"M100 100L65.62 67.92V36.78h68.76v31.14z\"/></g><path d=\"M51.14 38.89h8.33v14.93c0 15.1 8.29 28.99 23.34 39.1 1.88 1.25 3.04 3.97 3.04 7.08s-1.16 5.83-3.04 7.09c-15.05 10.1-23.34 23.99-23.34 39.09v14.93h-8.33a4.859 4.859 0 1 0 0 9.72h97.72a4.859 4.859 0 1 0 0-9.72h-8.33v-14.93c0-15.1-8.29-28.99-23.34-39.09-1.88-1.26-3.04-3.98-3.04-7.09s1.16-5.83 3.04-7.08c15.05-10.11 23.34-24 23.34-39.1V38.89h8.33a4.859 4.859 0 1 0 0-9.72H51.14a4.859 4.859 0 1 0 0 9.72zm79.67 14.93c0 15.87-11.93 26.25-19.04 31.03-4.6 3.08-7.34 8.75-7.34 15.15 0 6.41 2.74 12.07 7.34 15.15 7.11 4.78 19.04 15.16 19.04 31.03v14.93H69.19v-14.93c0-15.87 11.93-26.25 19.04-31.02 4.6-3.09 7.34-8.75 7.34-15.16 0-6.4-2.74-12.07-7.34-15.15-7.11-4.78-19.04-15.16-19.04-31.03V38.89h61.62v14.93z\"/></g></g></svg>";return i},W=function(t,e){t||(t="60px"),e||(e="#32c682");var i="<svg xmlns=\"http://www.w3.org/2000/svg\" width=\""+t+"\" height=\""+t+"\" viewBox=\"25 25 50 50\" style=\"-webkit-animation:rotate 2s linear infinite;animation:rotate 2s linear infinite;height:"+t+";-webkit-transform-origin:center center;-ms-transform-origin:center center;transform-origin:center center;width:"+t+";position:absolute;top:0;left:0;margin:auto\"><style>@-webkit-keyframes rotate{to{-webkit-transform:rotate(360deg);transform:rotate(360deg)}}@keyframes rotate{to{-webkit-transform:rotate(360deg);transform:rotate(360deg)}}@-webkit-keyframes dash{0%{stroke-dasharray:1,200;stroke-dashoffset:0}50%{stroke-dasharray:89,200;stroke-dashoffset:-35}to{stroke-dasharray:89,200;stroke-dashoffset:-124}}@keyframes dash{0%{stroke-dasharray:1,200;stroke-dashoffset:0}50%{stroke-dasharray:89,200;stroke-dashoffset:-35}to{stroke-dasharray:89,200;stroke-dashoffset:-124}}</style><circle cx=\"50\" cy=\"50\" r=\"20\" fill=\"none\" stroke=\""+e+"\" stroke-width=\"2\" style=\"-webkit-animation:dash 1.5s ease-in-out infinite,color 1.5s ease-in-out infinite;animation:dash 1.5s ease-in-out infinite,color 1.5s ease-in-out infinite\" stroke-dasharray=\"150 200\" stroke-dashoffset=\"-10\" stroke-linecap=\"round\"/></svg>";return i},I=function(t,e){t||(t="60px"),e||(e="#32c682");var i="<svg xmlns=\"http://www.w3.org/2000/svg\" fill=\""+e+"\" width=\""+t+"\" height=\""+t+"\" viewBox=\"0 0 128 128\"><g><path fill=\"inherit\" d=\"M109.25 55.5h-36l12-12a29.54 29.54 0 0 0-49.53 12H18.75A46.04 46.04 0 0 1 96.9 31.84l12.35-12.34v36zm-90.5 17h36l-12 12a29.54 29.54 0 0 0 49.53-12h16.97A46.04 46.04 0 0 1 31.1 96.16L18.74 108.5v-36z\"/><animateTransform attributeName=\"transform\" dur=\"1.5s\" from=\"0 64 64\" repeatCount=\"indefinite\" to=\"360 64 64\" type=\"rotate\"/></g></svg>";return i},L=function(t,e){t||(t="60px"),e||(e="#32c682");var i="<svg xmlns=\"http://www.w3.org/2000/svg\" fill=\""+e+"\" width=\""+t+"\" height=\""+t+"\" preserveAspectRatio=\"xMidYMid\" viewBox=\"0 0 100 100\"><g transform=\"translate(25 50)\"><circle r=\"9\" fill=\"inherit\" transform=\"scale(.239)\"><animateTransform attributeName=\"transform\" begin=\"-0.266s\" calcMode=\"spline\" dur=\"0.8s\" keySplines=\"0.3 0 0.7 1;0.3 0 0.7 1\" keyTimes=\"0;0.5;1\" repeatCount=\"indefinite\" type=\"scale\" values=\"0;1;0\"/></circle></g><g transform=\"translate(50 50)\"><circle r=\"9\" fill=\"inherit\" transform=\"scale(.00152)\"><animateTransform attributeName=\"transform\" begin=\"-0.133s\" calcMode=\"spline\" dur=\"0.8s\" keySplines=\"0.3 0 0.7 1;0.3 0 0.7 1\" keyTimes=\"0;0.5;1\" repeatCount=\"indefinite\" type=\"scale\" values=\"0;1;0\"/></circle></g><g transform=\"translate(75 50)\"><circle r=\"9\" fill=\"inherit\" transform=\"scale(.299)\"><animateTransform attributeName=\"transform\" begin=\"0s\" calcMode=\"spline\" dur=\"0.8s\" keySplines=\"0.3 0 0.7 1;0.3 0 0.7 1\" keyTimes=\"0;0.5;1\" repeatCount=\"indefinite\" type=\"scale\" values=\"0;1;0\"/></circle></g></svg>";return i},R=function(t,e){t||(t="60px"),e||(e="#32c682");var i="<svg xmlns=\"http://www.w3.org/2000/svg\" stroke=\""+e+"\" width=\""+t+"\" height=\""+t+"\" viewBox=\"0 0 44 44\"><g fill=\"none\" fill-rule=\"evenodd\" stroke-width=\"2\"><circle cx=\"22\" cy=\"22\" r=\"1\"><animate attributeName=\"r\" begin=\"0s\" calcMode=\"spline\" dur=\"1.8s\" keySplines=\"0.165, 0.84, 0.44, 1\" keyTimes=\"0; 1\" repeatCount=\"indefinite\" values=\"1; 20\"/><animate attributeName=\"stroke-opacity\" begin=\"0s\" calcMode=\"spline\" dur=\"1.8s\" keySplines=\"0.3, 0.61, 0.355, 1\" keyTimes=\"0; 1\" repeatCount=\"indefinite\" values=\"1; 0\"/></circle><circle cx=\"22\" cy=\"22\" r=\"1\"><animate attributeName=\"r\" begin=\"-0.9s\" calcMode=\"spline\" dur=\"1.8s\" keySplines=\"0.165, 0.84, 0.44, 1\" keyTimes=\"0; 1\" repeatCount=\"indefinite\" values=\"1; 20\"/><animate attributeName=\"stroke-opacity\" begin=\"-0.9s\" calcMode=\"spline\" dur=\"1.8s\" keySplines=\"0.3, 0.61, 0.355, 1\" keyTimes=\"0; 1\" repeatCount=\"indefinite\" values=\"1; 0\"/></circle></g></svg>";return i},M=function(t,e,i){t||(t="60px"),e||(e="#f8f8f8"),i||(i="#32c682");var a="<svg xmlns=\"http://www.w3.org/2000/svg\" id=\"NXLoadingNotiflixLib\" width=\""+t+"\" height=\""+t+"\" fill-rule=\"evenodd\" clip-rule=\"evenodd\" image-rendering=\"optimizeQuality\" shape-rendering=\"geometricPrecision\" text-rendering=\"geometricPrecision\" version=\"1.1\" viewBox=\"0 0 200 200\" xml:space=\"preserve\"><defs><style>@keyframes notiflix-n{0%{stroke-dashoffset:1000}to{stroke-dashoffset:0}}@keyframes notiflix-x{0%{stroke-dashoffset:1000}to{stroke-dashoffset:0}}@keyframes notiflix-dot{0%,to{stroke-width:0}50%{stroke-width:12}}.nx-icon-line{stroke:"+e+";stroke-width:12;stroke-linecap:round;stroke-linejoin:round;stroke-miterlimit:22;fill:none}</style></defs><path d=\"M47.97 135.05a6.5 6.5 0 1 1 0 13 6.5 6.5 0 0 1 0-13z\" style=\"animation-name:notiflix-dot;animation-timing-function:ease-in-out;animation-duration:1.25s;animation-iteration-count:infinite;animation-direction:normal\" fill=\""+i+"\" stroke=\""+i+"\" stroke-linecap=\"round\" stroke-linejoin=\"round\" stroke-miterlimit=\"22\" stroke-width=\"12\"/><path class=\"nx-icon-line\" d=\"M10.14 144.76V87.55c0-5.68-4.54-41.36 37.83-41.36 42.36 0 37.82 35.68 37.82 41.36v57.21\" style=\"animation-name:notiflix-n;animation-timing-function:linear;animation-duration:2.5s;animation-delay:0s;animation-iteration-count:infinite;animation-direction:normal\" stroke-dasharray=\"500\"/><path class=\"nx-icon-line\" d=\"M115.06 144.49c24.98-32.68 49.96-65.35 74.94-98.03M114.89 46.6c25.09 32.58 50.19 65.17 75.29 97.75\" style=\"animation-name:notiflix-x;animation-timing-function:linear;animation-duration:2.5s;animation-delay:.2s;animation-iteration-count:infinite;animation-direction:normal\" stroke-dasharray=\"500\"/></svg>";return a},A=0,B=0,X=function(a,o,n,r){if(!g("body"))return!1;e||H.Notify.Init({});var m=y(!0,e,{});if("object"==typeof o&&!Array.isArray(o)||"object"==typeof n&&!Array.isArray(n)){var c={};"object"==typeof o?c=o:"object"==typeof n&&(c=n),e=y(!0,e,c)}var p=e[r.toLocaleLowerCase("en")];A++,"function"==typeof o&&B++,"string"!=typeof a&&(a="Notiflix "+r),e.plainText&&(a=k(a)),!e.plainText&&a.length>e.messageMaxLength&&(e=y(!0,e,{closeButton:!0,messageMaxLength:100}),a="HTML Tags Error: Your content length is more than \"messageMaxLength\" option."),a.length>e.messageMaxLength&&(a=a.substring(0,e.messageMaxLength)+"..."),"shadow"===e.fontAwesomeIconStyle&&(p.fontAwesomeIconColor=p.background),e.cssAnimation||(e.cssAnimationDuration=0);var f=t.document.createElement("div");f.id=l.wrapID,f.style.width=e.width,f.style.zIndex=e.zindex,f.style.opacity=e.opacity,"center-center"===e.position?(f.style.left=e.distance,f.style.top=e.distance,f.style.right=e.distance,f.style.bottom=e.distance,f.style.margin="auto",f.classList.add("nx-flex-center-center"),f.style.maxHeight="calc((100vh - "+e.distance+") - "+e.distance+")",f.style.display="flex",f.style.flexWrap="wrap",f.style.flexDirection="column",f.style.justifyContent="center",f.style.alignItems="center",f.style.pointerEvents="none"):"center-top"===e.position?(f.style.left=e.distance,f.style.right=e.distance,f.style.top=e.distance,f.style.bottom="auto",f.style.margin="auto"):"center-bottom"===e.position?(f.style.left=e.distance,f.style.right=e.distance,f.style.bottom=e.distance,f.style.top="auto",f.style.margin="auto"):"right-bottom"===e.position?(f.style.right=e.distance,f.style.bottom=e.distance,f.style.top="auto",f.style.left="auto"):"left-top"===e.position?(f.style.left=e.distance,f.style.top=e.distance,f.style.right="auto",f.style.bottom="auto"):"left-bottom"===e.position?(f.style.left=e.distance,f.style.bottom=e.distance,f.style.top="auto",f.style.right="auto"):(f.style.right=e.distance,f.style.top=e.distance,f.style.left="auto",f.style.bottom="auto");var d;e.backOverlay&&(d=t.document.createElement("div"),d.id=e.ID+"Overlay",d.style.width="100%",d.style.height="100%",d.style.position="fixed",d.style.zIndex=e.zindex,d.style.left=0,d.style.top=0,d.style.right=0,d.style.bottom=0,d.style.background=p.backOverlayColor||e.backOverlayColor,d.className=e.cssAnimation?"with-animation":"",d.style.animationDuration=e.cssAnimation?e.cssAnimationDuration+"ms":"",t.document.getElementById(d.id)?0===B&&(t.document.getElementById(d.id).style.background=p.backOverlayColor||e.backOverlayColor):t.document.body.appendChild(d)),t.document.getElementById(f.id)||t.document.body.appendChild(f);var x=t.document.createElement("div");x.id=e.ID+"-"+A,x.className=e.className+" "+p.childClassName+" "+(e.cssAnimation?"with-animation":"")+" "+(e.useIcon?"with-icon":"")+" nx-"+e.cssAnimationStyle+" "+(e.closeButton&&"function"!=typeof o?"with-close-button":"")+" "+("function"==typeof o?"with-callback":"")+" "+(e.clickToClose?"click-to-close":""),x.style.fontSize=e.fontSize,x.style.color=p.textColor,x.style.background=p.background,x.style.borderRadius=e.borderRadius,x.style.pointerEvents="all",e.rtl&&(x.setAttribute("dir","rtl"),x.classList.add("rtl-on")),x.style.fontFamily="\""+e.fontFamily+"\", "+s,e.cssAnimation&&(x.style.animationDuration=e.cssAnimationDuration+"ms");var b="";if(e.closeButton&&"function"!=typeof o&&(b="<span class=\"notify-close-button\"><svg class=\"clck2cls\" xmlns=\"http://www.w3.org/2000/svg\" xml:space=\"preserve\" width=\"20px\" height=\"20px\" version=\"1.1\" style=\"shape-rendering:geometricPrecision; text-rendering:geometricPrecision; image-rendering:optimizeQuality; fill-rule:evenodd; clip-rule:evenodd\"viewBox=\"0 0 20 20\"xmlns:xlink=\"http://www.w3.org/1999/xlink\"><defs><style type=\"text/css\">.click2close{fill:"+p.notiflixIconColor+"}</style></defs><g><path class=\"click2close\" d=\"M0.38 2.19l7.8 7.81 -7.8 7.81c-0.51,0.5 -0.51,1.31 -0.01,1.81 0.25,0.25 0.57,0.38 0.91,0.38 0.34,0 0.67,-0.14 0.91,-0.38l7.81 -7.81 7.81 7.81c0.24,0.24 0.57,0.38 0.91,0.38 0.34,0 0.66,-0.14 0.9,-0.38 0.51,-0.5 0.51,-1.31 0,-1.81l-7.81 -7.81 7.81 -7.81c0.51,-0.5 0.51,-1.31 0,-1.82 -0.5,-0.5 -1.31,-0.5 -1.81,0l-7.81 7.81 -7.81 -7.81c-0.5,-0.5 -1.31,-0.5 -1.81,0 -0.51,0.51 -0.51,1.32 0,1.82z\"/></g></svg></span>"),!e.useIcon)x.innerHTML="<span class=\"the-message\">"+a+"</span>"+(e.closeButton?b:"");else if(e.useFontAwesome)x.innerHTML="<i style=\"color:"+p.fontAwesomeIconColor+"; font-size:"+e.fontAwesomeIconSize+";\" class=\"nmi wfa "+p.fontAwesomeClassName+" "+("shadow"===e.fontAwesomeIconStyle?"shadow":"basic")+"\"></i><span class=\"the-message with-icon\">"+a+"</span>"+(e.closeButton?b:"");else{var u;u="Success"===r?"<svg class=\"nmi\" xmlns=\"http://www.w3.org/2000/svg\" xml:space=\"preserve\" width=\"40px\" height=\"40px\" version=\"1.1\" style=\"shape-rendering:geometricPrecision; text-rendering:geometricPrecision; image-rendering:optimizeQuality; fill-rule:evenodd; clip-rule:evenodd\"viewBox=\"0 0 40 40\"xmlns:xlink=\"http://www.w3.org/1999/xlink\"><defs><style type=\"text/css\">#Notiflix-Icon-Success{fill:"+p.notiflixIconColor+"}</style></defs><g><path id=\"Notiflix-Icon-Success\" d=\"M20 0c11.03,0 20,8.97 20,20 0,11.03 -8.97,20 -20,20 -11.03,0 -20,-8.97 -20,-20 0,-11.03 8.97,-20 20,-20zm0 37.98c9.92,0 17.98,-8.06 17.98,-17.98 0,-9.92 -8.06,-17.98 -17.98,-17.98 -9.92,0 -17.98,8.06 -17.98,17.98 0,9.92 8.06,17.98 17.98,17.98zm-2.4 -13.29l11.52 -12.96c0.37,-0.41 1.01,-0.45 1.42,-0.08 0.42,0.37 0.46,1 0.09,1.42l-12.16 13.67c-0.19,0.22 -0.46,0.34 -0.75,0.34 -0.23,0 -0.45,-0.07 -0.63,-0.22l-7.6 -6.07c-0.43,-0.35 -0.5,-0.99 -0.16,-1.42 0.35,-0.43 0.99,-0.5 1.42,-0.16l6.85 5.48z\"/></g></svg>":"Failure"===r?"<svg class=\"nmi\" xmlns=\"http://www.w3.org/2000/svg\" xml:space=\"preserve\" width=\"40px\" height=\"40px\" version=\"1.1\" style=\"shape-rendering:geometricPrecision; text-rendering:geometricPrecision; image-rendering:optimizeQuality; fill-rule:evenodd; clip-rule:evenodd\"viewBox=\"0 0 40 40\"xmlns:xlink=\"http://www.w3.org/1999/xlink\"><defs><style type=\"text/css\">#Notiflix-Icon-Failure{fill:"+p.notiflixIconColor+"}</style></defs><g><path id=\"Notiflix-Icon-Failure\" d=\"M20 0c11.03,0 20,8.97 20,20 0,11.03 -8.97,20 -20,20 -11.03,0 -20,-8.97 -20,-20 0,-11.03 8.97,-20 20,-20zm0 37.98c9.92,0 17.98,-8.06 17.98,-17.98 0,-9.92 -8.06,-17.98 -17.98,-17.98 -9.92,0 -17.98,8.06 -17.98,17.98 0,9.92 8.06,17.98 17.98,17.98zm1.42 -17.98l6.13 6.12c0.39,0.4 0.39,1.04 0,1.43 -0.19,0.19 -0.45,0.29 -0.71,0.29 -0.27,0 -0.53,-0.1 -0.72,-0.29l-6.12 -6.13 -6.13 6.13c-0.19,0.19 -0.44,0.29 -0.71,0.29 -0.27,0 -0.52,-0.1 -0.71,-0.29 -0.39,-0.39 -0.39,-1.03 0,-1.43l6.13 -6.12 -6.13 -6.13c-0.39,-0.39 -0.39,-1.03 0,-1.42 0.39,-0.39 1.03,-0.39 1.42,0l6.13 6.12 6.12 -6.12c0.4,-0.39 1.04,-0.39 1.43,0 0.39,0.39 0.39,1.03 0,1.42l-6.13 6.13z\"/></g></svg>":"Warning"===r?"<svg class=\"nmi\" xmlns=\"http://www.w3.org/2000/svg\" xml:space=\"preserve\" width=\"40px\" height=\"40px\" version=\"1.1\" style=\"shape-rendering:geometricPrecision; text-rendering:geometricPrecision; image-rendering:optimizeQuality; fill-rule:evenodd; clip-rule:evenodd\"viewBox=\"0 0 40 40\"xmlns:xlink=\"http://www.w3.org/1999/xlink\"><defs><style type=\"text/css\">#Notiflix-Icon-Warning{fill:"+p.notiflixIconColor+"}</style></defs><g><path id=\"Notiflix-Icon-Warning\" d=\"M21.91 3.48l17.8 30.89c0.84,1.46 -0.23,3.25 -1.91,3.25l-35.6 0c-1.68,0 -2.75,-1.79 -1.91,-3.25l17.8 -30.89c0.85,-1.47 2.97,-1.47 3.82,0zm16.15 31.84l-17.8 -30.89c-0.11,-0.2 -0.41,-0.2 -0.52,0l-17.8 30.89c-0.12,0.2 0.05,0.4 0.26,0.4l35.6 0c0.21,0 0.38,-0.2 0.26,-0.4zm-19.01 -4.12l0 -1.05c0,-0.53 0.42,-0.95 0.95,-0.95 0.53,0 0.95,0.42 0.95,0.95l0 1.05c0,0.53 -0.42,0.95 -0.95,0.95 -0.53,0 -0.95,-0.42 -0.95,-0.95zm0 -4.66l0 -13.39c0,-0.52 0.42,-0.95 0.95,-0.95 0.53,0 0.95,0.43 0.95,0.95l0 13.39c0,0.53 -0.42,0.96 -0.95,0.96 -0.53,0 -0.95,-0.43 -0.95,-0.96z\"/></g></svg>":"Info"===r?"<svg class=\"nmi\" xmlns=\"http://www.w3.org/2000/svg\" xml:space=\"preserve\" width=\"40px\" height=\"40px\" version=\"1.1\" style=\"shape-rendering:geometricPrecision; text-rendering:geometricPrecision; image-rendering:optimizeQuality; fill-rule:evenodd; clip-rule:evenodd\"viewBox=\"0 0 40 40\"xmlns:xlink=\"http://www.w3.org/1999/xlink\"><defs><style type=\"text/css\">#Notiflix-Icon-Info{fill:"+p.notiflixIconColor+"}</style></defs><g><path id=\"Notiflix-Icon-Info\" d=\"M20 0c11.03,0 20,8.97 20,20 0,11.03 -8.97,20 -20,20 -11.03,0 -20,-8.97 -20,-20 0,-11.03 8.97,-20 20,-20zm0 37.98c9.92,0 17.98,-8.06 17.98,-17.98 0,-9.92 -8.06,-17.98 -17.98,-17.98 -9.92,0 -17.98,8.06 -17.98,17.98 0,9.92 8.06,17.98 17.98,17.98zm-0.99 -23.3c0,-0.54 0.44,-0.98 0.99,-0.98 0.55,0 0.99,0.44 0.99,0.98l0 15.86c0,0.55 -0.44,0.99 -0.99,0.99 -0.55,0 -0.99,-0.44 -0.99,-0.99l0 -15.86zm0 -5.22c0,-0.55 0.44,-0.99 0.99,-0.99 0.55,0 0.99,0.44 0.99,0.99l0 1.09c0,0.54 -0.44,0.99 -0.99,0.99 -0.55,0 -0.99,-0.45 -0.99,-0.99l0 -1.09z\"/></g></svg>":"",x.innerHTML=u+"<span class=\"the-message with-icon\">"+a+"</span>"+(e.closeButton?b:"")}if("left-bottom"===e.position||"right-bottom"===e.position){var w=t.document.getElementById(f.id);w.insertBefore(x,w.firstChild)}else t.document.getElementById(f.id).appendChild(x);if(e.useIcon){var h=t.document.getElementById(x.id).querySelectorAll(".nmi")[0],v=40;if(e.useFontAwesome)v=Math.round(parseInt(h.offsetHeight));else{var N=h.getBBox();v=Math.round(parseInt(N.width))}var z=t.document.getElementById(x.id).querySelectorAll("span")[0],C=Math.round(z.offsetHeight);C<=v&&(z.style.paddingTop=(v-C)/2+"px",z.style.paddingBottom=(v-C)/2+"px")}if(t.document.getElementById(x.id)){var S,W=t.document.getElementById(x.id),I=t.document.getElementById(f.id);e.backOverlay&&(S=t.document.getElementById(d.id));var L,R,M=function(){W.classList.add("remove"),e.backOverlay&&0>=I.childElementCount&&S.classList.add("remove"),clearTimeout(L)},X=function(){var i=t.document.getElementById(x.id);i&&null!==W.parentNode&&W.parentNode.removeChild(W),0>=I.childElementCount&&null!==I.parentNode&&(I.parentNode.removeChild(I),e.backOverlay&&null!==S.parentNode&&S.parentNode.removeChild(S)),clearTimeout(R)};if(e.closeButton&&"function"!=typeof o){var F=t.document.getElementById(x.id).querySelectorAll("span.notify-close-button")[0];F.addEventListener("click",function(){M();var t=setTimeout(function(){X(),clearTimeout(t)},e.cssAnimationDuration)})}("function"==typeof o||e.clickToClose)&&W.addEventListener("click",function(){"function"==typeof o&&(B--,o()),M();var t=setTimeout(function(){X(),clearTimeout(t)},e.cssAnimationDuration)}),e.closeButton||"function"==typeof o||(L=setTimeout(function(){M()},e.timeout),R=setTimeout(function(){X()},e.timeout+e.cssAnimationDuration))}if(e.showOnlyTheLastOne&&0<A)for(var E,D=t.document.querySelectorAll("[id^="+e.ID+"-]:not([id="+e.ID+"-"+A+"])"),T=0;T<D.length;T++)E=D[T],null!==E.parentNode&&E.parentNode.removeChild(E);e=y(!0,e,m)},F=function(e,a,o,n,r,l){if(!g("body"))return!1;i||H.Report.Init({});var c={};if("object"==typeof n&&!Array.isArray(n)||"object"==typeof r&&!Array.isArray(r)){var p={};"object"==typeof n?p=n:"object"==typeof r&&(p=r),c=y(!0,i,{}),i=y(!0,i,p)}var f=i[l.toLocaleLowerCase("en")];"string"!=typeof e&&(e="Notiflix "+l),"string"!=typeof a&&("Success"===l?a="\"Do not try to become a person of success but try to become a person of value.\" <br><br>- Albert Einstein":"Failure"===l?a="\"Failure is simply the opportunity to begin again, this time more intelligently.\" <br><br>- Henry Ford":"Warning"===l?a="\"The peoples who want to live comfortably without producing and fatigue; they are doomed to lose their dignity, then liberty, and then independence and destiny.\" <br><br>- Mustafa Kemal Ataturk":"Info"==l&&(a="\"Knowledge rests not upon truth alone, but upon error also.\" <br><br>- Carl Gustav Jung")),"string"!=typeof o&&(o="Okay"),i.plainText&&(e=k(e),a=k(a),o=k(o)),i.plainText||(e.length>i.titleMaxLength&&(e="HTML Tags Error",a="Your Title content length is more than \"titleMaxLength\" option.",o="Okay"),a.length>i.messageMaxLength&&(e="HTML Tags Error",a="Your Message content length is more than \"messageMaxLength\" option.",o="Okay"),o.length>i.buttonMaxLength&&(e="HTML Tags Error",a="Your Button content length is more than \"buttonMaxLength\" option.",o="Okay")),e.length>i.titleMaxLength&&(e=e.substring(0,i.titleMaxLength)+"..."),a.length>i.messageMaxLength&&(a=a.substring(0,i.messageMaxLength)+"..."),o.length>i.buttonMaxLength&&(o=o.substring(0,i.buttonMaxLength)+"..."),i.cssAnimation||(i.cssAnimationDuration=0);var d=t.document.createElement("div");d.id=m.ID,d.className=i.className,d.style.zIndex=i.zindex,d.style.borderRadius=i.borderRadius,d.style.fontFamily="\""+i.fontFamily+"\", "+s,i.rtl&&(d.setAttribute("dir","rtl"),d.classList.add("rtl-on")),d.style.display="flex",d.style.flexWrap="wrap",d.style.flexDirection="column",d.style.alignItems="center",d.style.justifyContent="center";var x="";i.backOverlay&&(x="<div class=\""+i.className+"-overlay"+(i.cssAnimation?" with-animation":"")+"\" style=\"background:"+(f.backOverlayColor||i.backOverlayColor)+";animation-duration:"+i.cssAnimationDuration+"ms;\"></div>");var b="";if("Success"===l?b=h(i.svgSize,f.svgColor):"Failure"===l?b=v(i.svgSize,f.svgColor):"Warning"===l?b=N(i.svgSize,f.svgColor):"Info"==l&&(b=z(i.svgSize,f.svgColor)),d.innerHTML=x+"<div class=\""+i.className+"-content"+(i.cssAnimation?" with-animation ":"")+" nx-"+i.cssAnimationStyle+"\" style=\"width:"+i.width+"; background:"+i.backgroundColor+"; animation-duration:"+i.cssAnimationDuration+"ms;\"><div style=\"width:"+i.svgSize+"; height:"+i.svgSize+";\" class=\""+i.className+"-icon\">"+b+"</div><h5 class=\""+i.className+"-title\" style=\"font-weight:500; font-size:"+i.titleFontSize+"; color:"+f.titleColor+";\">"+e+"</h5><p class=\""+i.className+"-message\" style=\"font-size:"+i.messageFontSize+"; color:"+f.messageColor+";\">"+a+"</p><a id=\"NXReportButton\" class=\""+i.className+"-button\" style=\"font-weight:500; font-size:"+i.buttonFontSize+"; background:"+f.buttonBackground+"; color:"+f.buttonColor+";\">"+o+"</a></div>",!t.document.getElementById(d.id)){t.document.body.appendChild(d);var u=t.document.getElementById(d.id),w=t.document.getElementById("NXReportButton");w.addEventListener("click",function(){"function"==typeof n&&n(),u.classList.add("remove");var t=setTimeout(function(){null!==u.parentNode&&u.parentNode.removeChild(u),clearTimeout(t)},i.cssAnimationDuration)})}i=y(!0,i,c)},E=function(e,i,o,n,r,l,m,p,f){if(!g("body"))return!1;a||H.Confirm.Init({});var d=y(!0,a,{});"object"!=typeof m||Array.isArray(m)||(a=y(!0,a,m)),"string"!=typeof e&&(e="Notiflix Confirm"),"string"!=typeof i&&(i="Do you agree with me?"),"string"!=typeof o&&(o="Yes"),"string"!=typeof n&&(n="No"),"function"!=typeof r&&(r=void 0),"function"!=typeof l&&(l=void 0),a.plainText&&(e=k(e),i=k(i),o=k(o),n=k(n)),a.plainText||(e.length>a.titleMaxLength&&(e="HTML Tags Error",i="Your Title content length is more than \"titleMaxLength\" option.",o="Okay",n="..."),i.length>a.messageMaxLength&&(e="HTML Tags Error",i="Your Message content length is more than \"messageMaxLength\" option.",o="Okay",n="..."),(o.length||n.length)>a.buttonsMaxLength&&(e="HTML Tags Error",i="Your Buttons contents length is more than \"buttonsMaxLength\" option.",o="Okay",n="...")),e.length>a.titleMaxLength&&(e=e.substring(0,a.titleMaxLength)+"..."),i.length>a.messageMaxLength&&(i=i.substring(0,a.messageMaxLength)+"..."),o.length>a.buttonsMaxLength&&(o=o.substring(0,a.buttonsMaxLength)+"..."),n.length>a.buttonsMaxLength&&(n=n.substring(0,a.buttonsMaxLength)+"..."),a.cssAnimation||(a.cssAnimationDuration=0);var x=t.document.createElement("div");x.id=c.ID,x.className=a.className+(a.cssAnimation?" with-animation nx-"+a.cssAnimationStyle:""),x.style.zIndex=a.zindex,x.style.padding=a.distance,a.rtl&&(x.setAttribute("dir","rtl"),x.classList.add("rtl-on"));var b="string"==typeof a.position?a.position.trim():"center";x.classList.add("nx-position-"+b),x.style.fontFamily="\""+a.fontFamily+"\", "+s;var u="";a.backOverlay&&(u="<div class=\""+a.className+"-overlay"+(a.cssAnimation?" with-animation":"")+"\" style=\"background:"+a.backOverlayColor+";animation-duration:"+a.cssAnimationDuration+"ms;\"></div>");var w="";"function"==typeof r&&(w="<a id=\"NXConfirmButtonCancel\" class=\"confirm-button-cancel\" style=\"color:"+a.cancelButtonColor+";background:"+a.cancelButtonBackground+";font-size:"+a.buttonsFontSize+";\">"+n+"</a>");var h="",v=!1;if(p&&"string"==typeof f&&0<f.length&&(v=f,h="<div><input id=\"NXConfirmValidationInput\" type=\"text\" style=\"font-size:"+a.messageFontSize+";border-radius: "+a.borderRadius+";\" maxlength=\""+f.length+"\" autocomplete=\"off\" spellcheck=\"false\" autocapitalize=\"none\" /></div>"),x.innerHTML=u+"<div class=\""+a.className+"-content\" style=\"width:"+a.width+"; background:"+a.backgroundColor+"; animation-duration:"+a.cssAnimationDuration+"ms; border-radius: "+a.borderRadius+";\"><div class=\""+a.className+"-head\"><h5 style=\"color:"+a.titleColor+";font-size:"+a.titleFontSize+";\">"+e+"</h5><div style=\"color:"+a.messageColor+";font-size:"+a.messageFontSize+";\">"+i+h+"</div></div><div class=\""+a.className+"-buttons\"><a id=\"NXConfirmButtonOk\" class=\"confirm-button-ok"+("function"==typeof r?"":" full")+"\" style=\"color:"+a.okButtonColor+";background:"+a.okButtonBackground+";font-size:"+a.buttonsFontSize+";\">"+o+"</a>"+w+"</div></div>",!t.document.getElementById(x.id)){t.document.body.appendChild(x);var N=t.document.getElementById(x.id),z=t.document.getElementById("NXConfirmButtonOk"),C=t.document.getElementById("NXConfirmValidationInput");if(C&&(C.focus(),C.addEventListener("keyup",function(t){var e=(t.target.value||"").toString();if(e!==v)C.classList.add("nx-validation-failure"),C.classList.remove("nx-validation-success");else{C.classList.remove("nx-validation-failure"),C.classList.add("nx-validation-success");var i="enter"===(t.key||"").toLocaleLowerCase("en")||13===t.keyCode;i&&z.dispatchEvent(new Event("click"))}})),z.addEventListener("click",function(t){if(p&&v&&C){var e=(C.value||"").toString();if(e!==v)return C.focus(),C.classList.add("nx-validation-failure"),t.stopPropagation(),t.preventDefault(),t.returnValue=!1,t.cancelBubble=!0,!1;C.classList.remove("nx-validation-failure")}"function"==typeof r&&r(),N.classList.add("remove");var i=setTimeout(function(){null!==N.parentNode&&(N.parentNode.removeChild(N),clearTimeout(i))},a.cssAnimationDuration)}),"function"==typeof r){var S=t.document.getElementById("NXConfirmButtonCancel");S.addEventListener("click",function(){"function"==typeof l&&l(),N.classList.add("remove");var t=setTimeout(function(){null!==N.parentNode&&(N.parentNode.removeChild(N),clearTimeout(t))},a.cssAnimationDuration)})}}a=y(!0,a,d)},D=function(e,i,a,n,r){if(!g("body"))return!1;o||H.Loading.Init({});var l=y(!0,o,{});if("object"==typeof e&&!Array.isArray(e)||"object"==typeof i&&!Array.isArray(i)){var m={};"object"==typeof e?m=e:"object"==typeof i&&(m=i),o=y(!0,o,m)}var c="";if("string"==typeof e&&0<e.length&&(c=e),n){c=c.toString().length>o.messageMaxLength?k(c).toString().substring(0,o.messageMaxLength)+"...":k(c).toString();var f="";0<c.length&&(f="<p id=\""+o.messageID+"\" class=\"loading-message\" style=\"color:"+o.messageColor+";font-size:"+o.messageFontSize+";\">"+c+"</p>"),o.cssAnimation||(o.cssAnimationDuration=0);var x="";if("standard"===a)x=C(o.svgSize,o.svgColor);else if("hourglass"===a)x=S(o.svgSize,o.svgColor);else if("circle"===a)x=W(o.svgSize,o.svgColor);else if("arrows"===a)x=I(o.svgSize,o.svgColor);else if("dots"===a)x=L(o.svgSize,o.svgColor);else if("pulse"===a)x=R(o.svgSize,o.svgColor);else if("custom"===a&&null!==o.customSvgUrl)x="<img class=\"custom-loading-icon\" width=\""+o.svgSize+"\" height=\""+o.svgSize+"\" src=\""+o.customSvgUrl+"\" alt=\"Notiflix\">";else{if("custom"===a&&null==o.customSvgUrl)return d("Notiflix Error","You have to set a static SVG url to \"customSvgUrl\" option to use Loading Custom."),!1;"notiflix"===a&&(x=M(o.svgSize,"#f8f8f8","#32c682"))}var b=parseInt((o.svgSize||"").replace(/[^0-9]/g,"")),u=t.innerWidth,w=b>=u?u-40+"px":b+"px",h="<div style=\"width:"+w+"; height:"+w+";\" class=\""+o.className+"-icon"+(0<c.length?" with-message":"")+"\">"+x+"</div>",v=t.document.createElement("div");if(v.id=p.ID,v.className=o.className+(o.cssAnimation?" with-animation":"")+(o.clickToClose?" click-to-close":""),v.style.zIndex=o.zindex,v.style.background=o.backgroundColor,v.style.animationDuration=o.cssAnimationDuration+"ms",v.style.fontFamily="\""+o.fontFamily+"\", "+s,v.style.display="flex",v.style.flexWrap="wrap",v.style.flexDirection="column",v.style.alignItems="center",v.style.justifyContent="center",o.rtl&&(v.setAttribute("dir","rtl"),v.classList.add("rtl-on")),v.innerHTML=h+f,!t.document.getElementById(v.id)&&(t.document.body.appendChild(v),o.clickToClose)){var N=t.document.getElementById(v.id);N.addEventListener("click",function(){v.classList.add("remove");var t=setTimeout(function(){null!==v.parentNode&&(v.parentNode.removeChild(v),clearTimeout(t))},o.cssAnimationDuration)})}}else if(t.document.getElementById(p.ID))var z=t.document.getElementById(p.ID),A=setTimeout(function(){z.classList.add("remove");var t=setTimeout(function(){null!==z.parentNode&&(z.parentNode.removeChild(z),clearTimeout(t))},o.cssAnimationDuration);clearTimeout(A)},r);o=y(!0,o,l)},T=function(e){"string"!=typeof e&&(e="");var i=t.document.getElementById(p.ID);if(i)if(0<e.length){e=e.length>o.messageMaxLength?k(e).substring(0,o.messageMaxLength)+"...":k(e);var a=i.getElementsByTagName("p")[0];if(a)a.innerHTML=e;else{var n=t.document.createElement("p");n.id=o.messageID,n.className="loading-message new-loading-message",n.style.color=o.messageColor,n.style.fontSize=o.messageFontSize,n.innerHTML=e,i.appendChild(n)}}else d("Notiflix Error","Where is the new message?")},j=0,O=function(e,a,o,r,l,m){if("string"!=typeof a||1>(a||"").length||1===(a||"").length&&("#"===(a||"")[0]||"."===(a||"")[0]))return d("Notiflix Error","The selector parameter must be a String and matches a specified CSS selector(s)."),!1;var c=t.document.querySelectorAll(a);if(1>c.length)return d("Notiflix Error","You called the \"Notiflix.Block...\" function with \""+a+"\" selector, but there is no such element(s) in the document."),!1;n||H.Block.Init({});var p=y(!0,n,{});if("object"==typeof r&&!Array.isArray(r)||"object"==typeof l&&!Array.isArray(l)){var b={};"object"==typeof r?b=r:"object"==typeof l&&(b=l),n=y(!0,n,b)}var u="";"string"==typeof r&&0<r.length&&(u=r),n.cssAnimation||(n.cssAnimationDuration=0);var w="notiflix-block";"string"==typeof n.className&&(w=n.className.trim());var h="number"==typeof n.querySelectorLimit?n.querySelectorLimit:200,v=c.length>=h?h:c.length;if(e)for(var N=0;N<v;N++){var z=c[N],M=z.querySelectorAll("[id^="+f.ID+"]");if(1>M.length){var A="";o&&("hourglass"===o?A=S(n.svgSize,n.svgColor):"circle"===o?A=W(n.svgSize,n.svgColor):"arrows"===o?A=I(n.svgSize,n.svgColor):"dots"===o?A=L(n.svgSize,n.svgColor):"pulse"===o?A=R(n.svgSize,n.svgColor):A=C(n.svgSize,n.svgColor));var B="<span class=\""+w+"-icon\" style=\"width:"+n.svgSize+";height:"+n.svgSize+";\">"+A+"</span>",X="";0<u.length&&(u=u.length>n.messageMaxLength?k(u).substring(0,n.messageMaxLength)+"...":k(u),X="<span style=\"font-size:"+n.messageFontSize+";color:"+n.messageColor+";\" class=\""+w+"-message\">"+u+"</span>"),j++;var F=t.document.createElement("div");F.id=f.ID+"-"+j,F.className=w+"-wrap"+(n.cssAnimation?" with-animation":""),F.style.position=n.position,F.style.zIndex=n.zindex,F.style.background=n.backgroundColor,F.style.animationDuration=n.cssAnimationDuration+"ms",F.style.fontFamily="\""+n.fontFamily+"\", "+s,F.style.display="flex",F.style.flexWrap="wrap",F.style.flexDirection="column",F.style.alignItems="center",F.style.justifyContent="center",n.rtl&&(F.setAttribute("dir","rtl"),F.classList.add("rtl-on")),F.innerHTML=B+X;var E=t.getComputedStyle(z).getPropertyValue("position"),D="string"==typeof E?E.toLocaleLowerCase("en"):"relative",T=Math.round(1.25*parseInt(n.svgSize))+40,O=z.offsetHeight||0,P="";T>O&&(P="min-height:"+T+"px;");var Q="";Q=z.getAttribute("id")?"#"+z.getAttribute("id"):z.classList[0]?"."+z.classList[0]:(z.tagName||"").toLocaleLowerCase("en");var Y="",G=-1>=["absolute","relative","fixed","sticky"].indexOf(D);if(G||0<P.length){if(!g("head"))return!1;G&&(Y="position:relative!important;");var U="<style id=\"Style-"+f.ID+"-"+j+"\">"+Q+"."+w+"-position{"+Y+P+"}</style>",V=t.document.createRange();V.selectNode(t.document.head);var q=V.createContextualFragment(U);t.document.head.appendChild(q),z.classList.add(w+"-position")}z.appendChild(F)}}else var K=function(e){var i=setTimeout(function(){null!==e.parentNode&&e.parentNode.removeChild(e);var a=e.getAttribute("id"),o=t.document.getElementById("Style-"+a);o&&null!==o.parentNode&&o.parentNode.removeChild(o),clearTimeout(i)},n.cssAnimationDuration)},$=function(t){if(t&&0<t.length)for(var e,o=0;o<t.length;o++)e=t[o],e&&(e.classList.add("remove"),K(e));else x("Notiflix Info","\"Notiflix.Block.Remove();\" function called with \""+a+"\" selector, but this selector does not have a \"Notiflix.Block...\" element to remove.")},J=function(t){var e=setTimeout(function(){var i=w+"-position";t.classList.remove(i),clearTimeout(e)},n.cssAnimationDuration+300)},Z=setTimeout(function(){for(var t,e=0;e<v;e++)t=c[e],J(t),M=t.querySelectorAll("[id^="+f.ID+"]"),$(M);clearTimeout(Z)},m);n=y(!0,n,p)},H={Notify:{Init:function(t){e=y(!0,l,t),w(e.useGoogleFont,e.fontFamily),u()},Merge:function(t){return e?void(e=y(!0,e,t)):(d("Notiflix Error","You have to initialize the Notify module before call Merge function."),!1)},Success:function(t,e,i){X(t,e,i,"Success")},Failure:function(t,e,i){X(t,e,i,"Failure")},Warning:function(t,e,i){X(t,e,i,"Warning")},Info:function(t,e,i){X(t,e,i,"Info")}},Report:{Init:function(t){i=y(!0,m,t),w(i.useGoogleFont,i.fontFamily),u()},Merge:function(t){return i?void(i=y(!0,i,t)):(d("Notiflix Error","You have to initialize the Report module before call Merge function."),!1)},Success:function(t,e,i,a,o){F(t,e,i,a,o,"Success")},Failure:function(t,e,i,a,o){F(t,e,i,a,o,"Failure")},Warning:function(t,e,i,a,o){F(t,e,i,a,o,"Warning")},Info:function(t,e,i,a,o){F(t,e,i,a,o,"Info")}},Confirm:{Init:function(t){a=y(!0,c,t),w(a.useGoogleFont,a.fontFamily),u()},Merge:function(t){return a?void(a=y(!0,a,t)):(d("Notiflix Error","You have to initialize the Confirm module before call Merge function."),!1)},Show:function(t,e,i,a,o,n,r){E(t,e,i,a,o,n,r,!1,!1)},Ask:function(t,e,i,a,o,n,r,s){E(t,e,a,o,n,r,s,!0,i)}},Loading:{Init:function(t){o=y(!0,p,t),w(o.useGoogleFont,o.fontFamily),u()},Merge:function(t){return o?void(o=y(!0,o,t)):(d("Notiflix Error","You have to initialize the Loading module before call Merge function."),!1)},Standard:function(t,e){D(t,e,"standard",!0,0)},Hourglass:function(t,e){D(t,e,"hourglass",!0,0)},Circle:function(t,e){D(t,e,"circle",!0,0)},Arrows:function(t,e){D(t,e,"arrows",!0,0)},Dots:function(t,e){D(t,e,"dots",!0,0)},Pulse:function(t,e){D(t,e,"pulse",!0,0)},Custom:function(t,e){D(t,e,"custom",!0,0)},Notiflix:function(t,e){D(t,e,"notiflix",!0,0)},Remove:function(t){"number"!=typeof t&&(t=0),D(!1,!1,!1,!1,t)},Change:function(t){T(t)}},Block:{Init:function(t){n=y(!0,f,t),w(n.useGoogleFont,n.fontFamily),u()},Merge:function(t){return n?void(n=y(!0,n,t)):(d("Notiflix Error","You have to initialize the \"Notiflix.Block\" module before call Merge function."),!1)},Standard:function(t,e,i){O(!0,t,"standard",e,i)},Hourglass:function(t,e,i){O(!0,t,"hourglass",e,i)},Circle:function(t,e,i){O(!0,t,"circle",e,i)},Arrows:function(t,e,i){O(!0,t,"arrows",e,i)},Dots:function(t,e,i){O(!0,t,"dots",e,i)},Pulse:function(t,e,i){O(!0,t,"pulse",e,i)},Remove:function(t,e){"number"!=typeof e&&(e=0),O(!1,t,!1,!1,!1,e)}}};return{Notify:H.Notify,Report:H.Report,Confirm:H.Confirm,Loading:H.Loading,Block:H.Block}});
 }).call(this)}).call(this,typeof global !== "undefined" ? global : typeof self !== "undefined" ? self : typeof window !== "undefined" ? window : {})
-},{}],386:[function(require,module,exports){
+},{}],385:[function(require,module,exports){
 var crypto = require('crypto')
 
 function sha (key, body, algorithm) {
@@ -106277,7 +105628,7 @@ exports.plaintext = plaintext
 exports.sign = sign
 exports.rfc3986 = rfc3986
 exports.generateBase = generateBase
-},{"crypto":81}],387:[function(require,module,exports){
+},{"crypto":81}],386:[function(require,module,exports){
 (function (process){(function (){
 // Generated by CoffeeScript 1.12.2
 (function() {
@@ -106317,7 +105668,7 @@ exports.generateBase = generateBase
 
 
 }).call(this)}).call(this,require('_process'))
-},{"_process":187}],388:[function(require,module,exports){
+},{"_process":187}],387:[function(require,module,exports){
 module.exports=[
 "ac",
 "com.ac",
@@ -115152,7 +114503,7 @@ module.exports=[
 "virtualserver.io",
 "enterprisecloud.nu"
 ]
-},{}],389:[function(require,module,exports){
+},{}],388:[function(require,module,exports){
 /*eslint no-var:0, prefer-arrow-callback: 0, object-shorthand: 0 */
 'use strict';
 
@@ -115423,7 +114774,7 @@ exports.isValid = function (domain) {
   return Boolean(parsed.domain && parsed.listed);
 };
 
-},{"./data/rules.json":388,"punycode":195}],390:[function(require,module,exports){
+},{"./data/rules.json":387,"punycode":195}],389:[function(require,module,exports){
 'use strict';
 
 var replace = String.prototype.replace;
@@ -115443,7 +114794,7 @@ module.exports = {
     RFC3986: 'RFC3986'
 };
 
-},{}],391:[function(require,module,exports){
+},{}],390:[function(require,module,exports){
 'use strict';
 
 var stringify = require('./stringify');
@@ -115456,7 +114807,7 @@ module.exports = {
     stringify: stringify
 };
 
-},{"./formats":390,"./parse":392,"./stringify":393}],392:[function(require,module,exports){
+},{"./formats":389,"./parse":391,"./stringify":392}],391:[function(require,module,exports){
 'use strict';
 
 var utils = require('./utils');
@@ -115632,7 +114983,7 @@ module.exports = function (str, opts) {
     return utils.compact(obj);
 };
 
-},{"./utils":394}],393:[function(require,module,exports){
+},{"./utils":393}],392:[function(require,module,exports){
 'use strict';
 
 var utils = require('./utils');
@@ -115844,7 +115195,7 @@ module.exports = function (object, opts) {
     return joined.length > 0 ? prefix + joined : '';
 };
 
-},{"./formats":390,"./utils":394}],394:[function(require,module,exports){
+},{"./formats":389,"./utils":393}],393:[function(require,module,exports){
 'use strict';
 
 var has = Object.prototype.hasOwnProperty;
@@ -116059,7 +115410,7 @@ module.exports = {
     merge: merge
 };
 
-},{}],395:[function(require,module,exports){
+},{}],394:[function(require,module,exports){
 // Copyright 2010-2012 Mikeal Rogers
 //
 //    Licensed under the Apache License, Version 2.0 (the "License");
@@ -116216,7 +115567,7 @@ Object.defineProperty(request, 'debug', {
   }
 })
 
-},{"./lib/cookies":397,"./lib/helpers":401,"./request":407,"extend":326}],396:[function(require,module,exports){
+},{"./lib/cookies":396,"./lib/helpers":400,"./request":406,"extend":325}],395:[function(require,module,exports){
 'use strict'
 
 var caseless = require('caseless')
@@ -116385,7 +115736,7 @@ Auth.prototype.onResponse = function (response) {
 
 exports.Auth = Auth
 
-},{"./helpers":401,"caseless":314,"uuid/v4":460}],397:[function(require,module,exports){
+},{"./helpers":400,"caseless":313,"uuid/v4":459}],396:[function(require,module,exports){
 'use strict'
 
 var tough = require('tough-cookie')
@@ -116425,7 +115776,7 @@ exports.jar = function (store) {
   return new RequestJar(store)
 }
 
-},{"tough-cookie":448}],398:[function(require,module,exports){
+},{"tough-cookie":447}],397:[function(require,module,exports){
 (function (process){(function (){
 'use strict'
 
@@ -116508,7 +115859,7 @@ function getProxyFromURI (uri) {
 module.exports = getProxyFromURI
 
 }).call(this)}).call(this,require('_process'))
-},{"_process":187}],399:[function(require,module,exports){
+},{"_process":187}],398:[function(require,module,exports){
 'use strict'
 
 var fs = require('fs')
@@ -116715,7 +116066,7 @@ Har.prototype.options = function (options) {
 
 exports.Har = Har
 
-},{"extend":326,"fs":1,"har-validator":354,"querystring":198}],400:[function(require,module,exports){
+},{"extend":325,"fs":1,"har-validator":353,"querystring":198}],399:[function(require,module,exports){
 'use strict'
 
 var crypto = require('crypto')
@@ -116806,7 +116157,7 @@ exports.header = function (uri, method, opts) {
   return header
 }
 
-},{"crypto":81}],401:[function(require,module,exports){
+},{"crypto":81}],400:[function(require,module,exports){
 (function (process,setImmediate){(function (){
 'use strict'
 
@@ -116876,7 +116227,7 @@ exports.version = version
 exports.defer = defer
 
 }).call(this)}).call(this,require('_process'),require("timers").setImmediate)
-},{"_process":187,"crypto":81,"json-stringify-safe":371,"safe-buffer":408,"timers":247}],402:[function(require,module,exports){
+},{"_process":187,"crypto":81,"json-stringify-safe":370,"safe-buffer":407,"timers":247}],401:[function(require,module,exports){
 'use strict'
 
 var uuid = require('uuid/v4')
@@ -116990,7 +116341,7 @@ Multipart.prototype.onRequest = function (options) {
 
 exports.Multipart = Multipart
 
-},{"combined-stream":315,"isstream":366,"safe-buffer":408,"uuid/v4":460}],403:[function(require,module,exports){
+},{"combined-stream":314,"isstream":365,"safe-buffer":407,"uuid/v4":459}],402:[function(require,module,exports){
 'use strict'
 
 var url = require('url')
@@ -117140,7 +116491,7 @@ OAuth.prototype.onRequest = function (_oauth) {
 
 exports.OAuth = OAuth
 
-},{"caseless":314,"crypto":81,"oauth-sign":386,"qs":391,"safe-buffer":408,"url":248,"uuid/v4":460}],404:[function(require,module,exports){
+},{"caseless":313,"crypto":81,"oauth-sign":385,"qs":390,"safe-buffer":407,"url":248,"uuid/v4":459}],403:[function(require,module,exports){
 'use strict'
 
 var qs = require('qs')
@@ -117192,7 +116543,7 @@ Querystring.prototype.unescape = querystring.unescape
 
 exports.Querystring = Querystring
 
-},{"qs":391,"querystring":198}],405:[function(require,module,exports){
+},{"qs":390,"querystring":198}],404:[function(require,module,exports){
 'use strict'
 
 var url = require('url')
@@ -117348,7 +116699,7 @@ Redirect.prototype.onResponse = function (response) {
 
 exports.Redirect = Redirect
 
-},{"url":248}],406:[function(require,module,exports){
+},{"url":248}],405:[function(require,module,exports){
 'use strict'
 
 var url = require('url')
@@ -117525,7 +116876,7 @@ Tunnel.defaultProxyHeaderWhiteList = defaultProxyHeaderWhiteList
 Tunnel.defaultProxyHeaderExclusiveList = defaultProxyHeaderExclusiveList
 exports.Tunnel = Tunnel
 
-},{"tunnel-agent":455,"url":248}],407:[function(require,module,exports){
+},{"tunnel-agent":454,"url":248}],406:[function(require,module,exports){
 (function (process){(function (){
 'use strict'
 
@@ -119082,11 +118433,11 @@ Request.prototype.toJSON = requestToJSON
 module.exports = Request
 
 }).call(this)}).call(this,require('_process'))
-},{"./lib/auth":396,"./lib/cookies":397,"./lib/getProxyFromURI":398,"./lib/har":399,"./lib/hawk":400,"./lib/helpers":401,"./lib/multipart":402,"./lib/oauth":403,"./lib/querystring":404,"./lib/redirect":405,"./lib/tunnel":406,"_process":187,"aws-sign2":310,"aws4":311,"caseless":314,"extend":326,"forever-agent":332,"form-data":333,"http":227,"http-signature":355,"https":150,"is-typedarray":365,"isstream":366,"mime-types":376,"performance-now":387,"safe-buffer":408,"stream":212,"url":248,"util":253,"zlib":70}],408:[function(require,module,exports){
+},{"./lib/auth":395,"./lib/cookies":396,"./lib/getProxyFromURI":397,"./lib/har":398,"./lib/hawk":399,"./lib/helpers":400,"./lib/multipart":401,"./lib/oauth":402,"./lib/querystring":403,"./lib/redirect":404,"./lib/tunnel":405,"_process":187,"aws-sign2":309,"aws4":310,"caseless":313,"extend":325,"forever-agent":331,"form-data":332,"http":227,"http-signature":354,"https":150,"is-typedarray":364,"isstream":365,"mime-types":375,"performance-now":386,"safe-buffer":407,"stream":212,"url":248,"util":253,"zlib":70}],407:[function(require,module,exports){
 arguments[4][202][0].apply(exports,arguments)
-},{"buffer":72,"dup":202}],409:[function(require,module,exports){
+},{"buffer":72,"dup":202}],408:[function(require,module,exports){
 arguments[4][203][0].apply(exports,arguments)
-},{"_process":187,"buffer":72,"dup":203}],410:[function(require,module,exports){
+},{"_process":187,"buffer":72,"dup":203}],409:[function(require,module,exports){
 (function (Buffer){(function (){
 ;(function (sax) { // wrapper for non-node envs
   sax.parser = function (strict, opt) { return new SAXParser(strict, opt) }
@@ -120655,7 +120006,7 @@ arguments[4][203][0].apply(exports,arguments)
 })(typeof exports === 'undefined' ? this.sax = {} : exports)
 
 }).call(this)}).call(this,require("buffer").Buffer)
-},{"buffer":72,"stream":212,"string_decoder":246}],411:[function(require,module,exports){
+},{"buffer":72,"stream":212,"string_decoder":246}],410:[function(require,module,exports){
 (function (Buffer){(function (){
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
@@ -121891,7 +121242,7 @@ class SmartBuffer {
 exports.SmartBuffer = SmartBuffer;
 
 }).call(this)}).call(this,require("buffer").Buffer)
-},{"./utils":412,"buffer":72}],412:[function(require,module,exports){
+},{"./utils":411,"buffer":72}],411:[function(require,module,exports){
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
 const buffer_1 = require("buffer");
@@ -122000,7 +121351,7 @@ function bigIntAndBufferInt64Check(bufferMethod) {
 }
 exports.bigIntAndBufferInt64Check = bigIntAndBufferInt64Check;
 
-},{"buffer":72}],413:[function(require,module,exports){
+},{"buffer":72}],412:[function(require,module,exports){
 /**
  * Module dependencies.
  */
@@ -122147,9 +121498,9 @@ SocksProxyAgent.prototype.callback = function connect(req, opts, fn) {
   }
 }
 
-},{"agent-base":414,"dns":1,"socks":421,"tls":1,"url":248,"util":253}],414:[function(require,module,exports){
-arguments[4][257][0].apply(exports,arguments)
-},{"./patch-core":415,"dup":257,"es6-promisify":325,"events":114,"util":253}],415:[function(require,module,exports){
+},{"agent-base":413,"dns":1,"socks":420,"tls":1,"url":248,"util":253}],413:[function(require,module,exports){
+arguments[4][256][0].apply(exports,arguments)
+},{"./patch-core":414,"dup":256,"es6-promisify":324,"events":114,"util":253}],414:[function(require,module,exports){
 'use strict';
 const url = require('url');
 const https = require('https');
@@ -122188,7 +121539,7 @@ https.get = function(options, cb) {
   return req;
 };
 
-},{"https":150,"url":248}],416:[function(require,module,exports){
+},{"https":150,"url":248}],415:[function(require,module,exports){
 (function (Buffer,setImmediate){(function (){
 "use strict";
 var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, P, generator) {
@@ -122914,7 +122265,7 @@ class SocksClient extends events_1.EventEmitter {
 exports.SocksClient = SocksClient;
 
 }).call(this)}).call(this,require("buffer").Buffer,require("timers").setImmediate)
-},{"../common/constants":417,"../common/helpers":418,"../common/receivebuffer":419,"../common/util":420,"buffer":72,"events":114,"ip":364,"net":1,"smart-buffer":411,"timers":247}],417:[function(require,module,exports){
+},{"../common/constants":416,"../common/helpers":417,"../common/receivebuffer":418,"../common/util":419,"buffer":72,"events":114,"ip":363,"net":1,"smart-buffer":410,"timers":247}],416:[function(require,module,exports){
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
 const DEFAULT_TIMEOUT = 30000;
@@ -123020,7 +122371,7 @@ var SocksClientState;
 })(SocksClientState || (SocksClientState = {}));
 exports.SocksClientState = SocksClientState;
 
-},{}],418:[function(require,module,exports){
+},{}],417:[function(require,module,exports){
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
 const util_1 = require("./util");
@@ -123121,7 +122472,7 @@ function isValidTimeoutValue(value) {
     return typeof value === 'number' && value > 0;
 }
 
-},{"./constants":417,"./util":420,"stream":212}],419:[function(require,module,exports){
+},{"./constants":416,"./util":419,"stream":212}],418:[function(require,module,exports){
 (function (Buffer){(function (){
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
@@ -123166,7 +122517,7 @@ class ReceiveBuffer {
 exports.ReceiveBuffer = ReceiveBuffer;
 
 }).call(this)}).call(this,require("buffer").Buffer)
-},{"buffer":72}],420:[function(require,module,exports){
+},{"buffer":72}],419:[function(require,module,exports){
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
 /**
@@ -123191,7 +122542,7 @@ function shuffleArray(array) {
 }
 exports.shuffleArray = shuffleArray;
 
-},{}],421:[function(require,module,exports){
+},{}],420:[function(require,module,exports){
 "use strict";
 function __export(m) {
     for (var p in m) if (!exports.hasOwnProperty(p)) exports[p] = m[p];
@@ -123199,7 +122550,7 @@ function __export(m) {
 Object.defineProperty(exports, "__esModule", { value: true });
 __export(require("./client/socksclient"));
 
-},{"./client/socksclient":416}],422:[function(require,module,exports){
+},{"./client/socksclient":415}],421:[function(require,module,exports){
 // Copyright 2015 Joyent, Inc.
 
 var Buffer = require('safer-buffer').Buffer;
@@ -123369,7 +122720,7 @@ module.exports = {
 	curves: curves
 };
 
-},{"safer-buffer":409}],423:[function(require,module,exports){
+},{"safer-buffer":408}],422:[function(require,module,exports){
 // Copyright 2016 Joyent, Inc.
 
 module.exports = Certificate;
@@ -123781,7 +123132,7 @@ Certificate._oldVersionDetect = function (obj) {
 	return ([1, 0]);
 };
 
-},{"./algs":422,"./errors":426,"./fingerprint":427,"./formats/openssh-cert":430,"./formats/x509":439,"./formats/x509-pem":438,"./identity":440,"./key":442,"./private-key":443,"./signature":444,"./utils":446,"assert-plus":308,"crypto":81,"safer-buffer":409,"util":253}],424:[function(require,module,exports){
+},{"./algs":421,"./errors":425,"./fingerprint":426,"./formats/openssh-cert":429,"./formats/x509":438,"./formats/x509-pem":437,"./identity":439,"./key":441,"./private-key":442,"./signature":443,"./utils":445,"assert-plus":307,"crypto":81,"safer-buffer":408,"util":253}],423:[function(require,module,exports){
 // Copyright 2017 Joyent, Inc.
 
 module.exports = {
@@ -124180,7 +123531,7 @@ function generateECDSA(curve) {
 	}
 }
 
-},{"./algs":422,"./key":442,"./private-key":443,"./utils":446,"assert-plus":308,"crypto":81,"ecc-jsbn":320,"ecc-jsbn/lib/ec":321,"jsbn":368,"safer-buffer":409,"tweetnacl":456}],425:[function(require,module,exports){
+},{"./algs":421,"./key":441,"./private-key":442,"./utils":445,"assert-plus":307,"crypto":81,"ecc-jsbn":319,"ecc-jsbn/lib/ec":320,"jsbn":367,"safer-buffer":408,"tweetnacl":455}],424:[function(require,module,exports){
 // Copyright 2015 Joyent, Inc.
 
 module.exports = {
@@ -124274,7 +123625,7 @@ Signer.prototype.sign = function () {
 	return (sigObj);
 };
 
-},{"./signature":444,"assert-plus":308,"safer-buffer":409,"stream":212,"tweetnacl":456,"util":253}],426:[function(require,module,exports){
+},{"./signature":443,"assert-plus":307,"safer-buffer":408,"stream":212,"tweetnacl":455,"util":253}],425:[function(require,module,exports){
 // Copyright 2015 Joyent, Inc.
 
 var assert = require('assert-plus');
@@ -124360,7 +123711,7 @@ module.exports = {
 	CertificateParseError: CertificateParseError
 };
 
-},{"assert-plus":308,"util":253}],427:[function(require,module,exports){
+},{"assert-plus":307,"util":253}],426:[function(require,module,exports){
 // Copyright 2018 Joyent, Inc.
 
 module.exports = Fingerprint;
@@ -124582,7 +123933,7 @@ Fingerprint._oldVersionDetect = function (obj) {
 	return ([1, 0]);
 };
 
-},{"./algs":422,"./certificate":423,"./errors":426,"./key":442,"./private-key":443,"./utils":446,"assert-plus":308,"crypto":81,"safer-buffer":409}],428:[function(require,module,exports){
+},{"./algs":421,"./certificate":422,"./errors":425,"./key":441,"./private-key":442,"./utils":445,"assert-plus":307,"crypto":81,"safer-buffer":408}],427:[function(require,module,exports){
 // Copyright 2018 Joyent, Inc.
 
 module.exports = {
@@ -124708,7 +124059,7 @@ function write(key, options) {
 	throw (new Error('"auto" format cannot be used for writing'));
 }
 
-},{"../key":442,"../private-key":443,"../utils":446,"./dnssec":429,"./pem":431,"./putty":434,"./rfc4253":435,"./ssh":437,"assert-plus":308,"safer-buffer":409}],429:[function(require,module,exports){
+},{"../key":441,"../private-key":442,"../utils":445,"./dnssec":428,"./pem":430,"./putty":433,"./rfc4253":434,"./ssh":436,"assert-plus":307,"safer-buffer":408}],428:[function(require,module,exports){
 // Copyright 2017 Joyent, Inc.
 
 module.exports = {
@@ -124997,7 +124348,7 @@ function write(key, options) {
 	}
 }
 
-},{"../dhe":424,"../key":442,"../private-key":443,"../ssh-buffer":445,"../utils":446,"assert-plus":308,"safer-buffer":409}],430:[function(require,module,exports){
+},{"../dhe":423,"../key":441,"../private-key":442,"../ssh-buffer":444,"../utils":445,"assert-plus":307,"safer-buffer":408}],429:[function(require,module,exports){
 // Copyright 2017 Joyent, Inc.
 
 module.exports = {
@@ -125351,7 +124702,7 @@ function getCertType(key) {
 	throw (new Error('Unsupported key type ' + key.type));
 }
 
-},{"../algs":422,"../certificate":423,"../identity":440,"../key":442,"../private-key":443,"../signature":444,"../ssh-buffer":445,"../utils":446,"./rfc4253":435,"assert-plus":308,"crypto":81,"safer-buffer":409}],431:[function(require,module,exports){
+},{"../algs":421,"../certificate":422,"../identity":439,"../key":441,"../private-key":442,"../signature":443,"../ssh-buffer":444,"../utils":445,"./rfc4253":434,"assert-plus":307,"crypto":81,"safer-buffer":408}],430:[function(require,module,exports){
 // Copyright 2018 Joyent, Inc.
 
 module.exports = {
@@ -125643,7 +124994,7 @@ function write(key, options, type) {
 	return (buf.slice(0, o));
 }
 
-},{"../algs":422,"../errors":426,"../key":442,"../private-key":443,"../utils":446,"./pkcs1":432,"./pkcs8":433,"./rfc4253":435,"./ssh-private":436,"asn1":307,"assert-plus":308,"crypto":81,"safer-buffer":409}],432:[function(require,module,exports){
+},{"../algs":421,"../errors":425,"../key":441,"../private-key":442,"../utils":445,"./pkcs1":431,"./pkcs8":432,"./rfc4253":434,"./ssh-private":435,"asn1":306,"assert-plus":307,"crypto":81,"safer-buffer":408}],431:[function(require,module,exports){
 // Copyright 2015 Joyent, Inc.
 
 module.exports = {
@@ -126018,7 +125369,7 @@ function writePkcs1EdDSAPublic(der, key) {
 	throw (new Error('Public keys are not supported for EdDSA PKCS#1'));
 }
 
-},{"../algs":422,"../key":442,"../private-key":443,"../utils":446,"./pem":431,"./pkcs8":433,"asn1":307,"assert-plus":308,"safer-buffer":409}],433:[function(require,module,exports){
+},{"../algs":421,"../key":441,"../private-key":442,"../utils":445,"./pem":430,"./pkcs8":432,"asn1":306,"assert-plus":307,"safer-buffer":408}],432:[function(require,module,exports){
 // Copyright 2018 Joyent, Inc.
 
 module.exports = {
@@ -126651,7 +126002,7 @@ function writePkcs8EdDSAPrivate(key, der) {
 	der.endSequence();
 }
 
-},{"../algs":422,"../key":442,"../private-key":443,"../utils":446,"./pem":431,"asn1":307,"assert-plus":308,"safer-buffer":409}],434:[function(require,module,exports){
+},{"../algs":421,"../key":441,"../private-key":442,"../utils":445,"./pem":430,"asn1":306,"assert-plus":307,"safer-buffer":408}],433:[function(require,module,exports){
 // Copyright 2018 Joyent, Inc.
 
 module.exports = {
@@ -126752,7 +126103,7 @@ function wrap(txt, len) {
 	return (lines);
 }
 
-},{"../errors":426,"../key":442,"./rfc4253":435,"assert-plus":308,"safer-buffer":409}],435:[function(require,module,exports){
+},{"../errors":425,"../key":441,"./rfc4253":434,"assert-plus":307,"safer-buffer":408}],434:[function(require,module,exports){
 // Copyright 2015 Joyent, Inc.
 
 module.exports = {
@@ -126920,7 +126271,7 @@ function write(key, options) {
 	return (buf.toBuffer());
 }
 
-},{"../algs":422,"../key":442,"../private-key":443,"../ssh-buffer":445,"../utils":446,"assert-plus":308,"safer-buffer":409}],436:[function(require,module,exports){
+},{"../algs":421,"../key":441,"../private-key":442,"../ssh-buffer":444,"../utils":445,"assert-plus":307,"safer-buffer":408}],435:[function(require,module,exports){
 // Copyright 2015 Joyent, Inc.
 
 module.exports = {
@@ -127184,7 +126535,7 @@ function write(key, options) {
 	return (buf.slice(0, o));
 }
 
-},{"../algs":422,"../errors":426,"../key":442,"../private-key":443,"../ssh-buffer":445,"../utils":446,"./pem":431,"./rfc4253":435,"asn1":307,"assert-plus":308,"bcrypt-pbkdf":313,"crypto":81,"safer-buffer":409}],437:[function(require,module,exports){
+},{"../algs":421,"../errors":425,"../key":441,"../private-key":442,"../ssh-buffer":444,"../utils":445,"./pem":430,"./rfc4253":434,"asn1":306,"assert-plus":307,"bcrypt-pbkdf":312,"crypto":81,"safer-buffer":408}],436:[function(require,module,exports){
 // Copyright 2015 Joyent, Inc.
 
 module.exports = {
@@ -127301,7 +126652,7 @@ function write(key, options) {
 	return (Buffer.from(parts.join(' ')));
 }
 
-},{"../key":442,"../private-key":443,"../utils":446,"./rfc4253":435,"./ssh-private":436,"assert-plus":308,"safer-buffer":409}],438:[function(require,module,exports){
+},{"../key":441,"../private-key":442,"../utils":445,"./rfc4253":434,"./ssh-private":435,"assert-plus":307,"safer-buffer":408}],437:[function(require,module,exports){
 // Copyright 2016 Joyent, Inc.
 
 var x509 = require('./x509');
@@ -127391,7 +126742,7 @@ function write(cert, options) {
 	return (buf.slice(0, o));
 }
 
-},{"../algs":422,"../certificate":423,"../identity":440,"../key":442,"../private-key":443,"../signature":444,"../utils":446,"./pem":431,"./x509":439,"asn1":307,"assert-plus":308,"safer-buffer":409}],439:[function(require,module,exports){
+},{"../algs":421,"../certificate":422,"../identity":439,"../key":441,"../private-key":442,"../signature":443,"../utils":445,"./pem":430,"./x509":438,"asn1":306,"assert-plus":307,"safer-buffer":408}],438:[function(require,module,exports){
 // Copyright 2017 Joyent, Inc.
 
 module.exports = {
@@ -128145,7 +127496,7 @@ function writeBitField(setBits, bitIndex) {
 	return (bits);
 }
 
-},{"../algs":422,"../certificate":423,"../identity":440,"../key":442,"../private-key":443,"../signature":444,"../utils":446,"./pem":431,"./pkcs8":433,"asn1":307,"assert-plus":308,"safer-buffer":409}],440:[function(require,module,exports){
+},{"../algs":421,"../certificate":422,"../identity":439,"../key":441,"../private-key":442,"../signature":443,"../utils":445,"./pem":430,"./pkcs8":432,"asn1":306,"assert-plus":307,"safer-buffer":408}],439:[function(require,module,exports){
 // Copyright 2017 Joyent, Inc.
 
 module.exports = Identity;
@@ -128520,7 +127871,7 @@ Identity._oldVersionDetect = function (obj) {
 	return ([1, 0]);
 };
 
-},{"./algs":422,"./errors":426,"./fingerprint":427,"./signature":444,"./utils":446,"asn1":307,"assert-plus":308,"crypto":81,"safer-buffer":409,"util":253}],441:[function(require,module,exports){
+},{"./algs":421,"./errors":425,"./fingerprint":426,"./signature":443,"./utils":445,"asn1":306,"assert-plus":307,"crypto":81,"safer-buffer":408,"util":253}],440:[function(require,module,exports){
 // Copyright 2015 Joyent, Inc.
 
 var Key = require('./key');
@@ -128562,7 +127913,7 @@ module.exports = {
 	CertificateParseError: errs.CertificateParseError
 };
 
-},{"./certificate":423,"./errors":426,"./fingerprint":427,"./identity":440,"./key":442,"./private-key":443,"./signature":444}],442:[function(require,module,exports){
+},{"./certificate":422,"./errors":425,"./fingerprint":426,"./identity":439,"./key":441,"./private-key":442,"./signature":443}],441:[function(require,module,exports){
 (function (Buffer){(function (){
 // Copyright 2018 Joyent, Inc.
 
@@ -128860,7 +128211,7 @@ Key._oldVersionDetect = function (obj) {
 };
 
 }).call(this)}).call(this,{"isBuffer":require("../../../../../../../../AppData/Roaming/npm/node_modules/browserify/node_modules/is-buffer/index.js")})
-},{"../../../../../../../../AppData/Roaming/npm/node_modules/browserify/node_modules/is-buffer/index.js":154,"./algs":422,"./dhe":424,"./ed-compat":425,"./errors":426,"./fingerprint":427,"./formats/auto":428,"./formats/dnssec":429,"./formats/pem":431,"./formats/pkcs1":432,"./formats/pkcs8":433,"./formats/putty":434,"./formats/rfc4253":435,"./formats/ssh":437,"./formats/ssh-private":436,"./private-key":443,"./signature":444,"./utils":446,"assert-plus":308,"crypto":81}],443:[function(require,module,exports){
+},{"../../../../../../../../AppData/Roaming/npm/node_modules/browserify/node_modules/is-buffer/index.js":154,"./algs":421,"./dhe":423,"./ed-compat":424,"./errors":425,"./fingerprint":426,"./formats/auto":427,"./formats/dnssec":428,"./formats/pem":430,"./formats/pkcs1":431,"./formats/pkcs8":432,"./formats/putty":433,"./formats/rfc4253":434,"./formats/ssh":436,"./formats/ssh-private":435,"./private-key":442,"./signature":443,"./utils":445,"assert-plus":307,"crypto":81}],442:[function(require,module,exports){
 // Copyright 2017 Joyent, Inc.
 
 module.exports = PrivateKey;
@@ -129108,7 +128459,7 @@ PrivateKey._oldVersionDetect = function (obj) {
 	return ([1, 0]);
 };
 
-},{"./algs":422,"./dhe":424,"./ed-compat":425,"./errors":426,"./fingerprint":427,"./formats/auto":428,"./formats/dnssec":429,"./formats/pem":431,"./formats/pkcs1":432,"./formats/pkcs8":433,"./formats/rfc4253":435,"./formats/ssh-private":436,"./key":442,"./signature":444,"./utils":446,"assert-plus":308,"crypto":81,"safer-buffer":409,"tweetnacl":456,"util":253}],444:[function(require,module,exports){
+},{"./algs":421,"./dhe":423,"./ed-compat":424,"./errors":425,"./fingerprint":426,"./formats/auto":427,"./formats/dnssec":428,"./formats/pem":430,"./formats/pkcs1":431,"./formats/pkcs8":432,"./formats/rfc4253":434,"./formats/ssh-private":435,"./key":441,"./signature":443,"./utils":445,"assert-plus":307,"crypto":81,"safer-buffer":408,"tweetnacl":455,"util":253}],443:[function(require,module,exports){
 // Copyright 2015 Joyent, Inc.
 
 module.exports = Signature;
@@ -129424,7 +128775,7 @@ Signature._oldVersionDetect = function (obj) {
 	return ([1, 0]);
 };
 
-},{"./algs":422,"./errors":426,"./ssh-buffer":445,"./utils":446,"asn1":307,"assert-plus":308,"crypto":81,"safer-buffer":409}],445:[function(require,module,exports){
+},{"./algs":421,"./errors":425,"./ssh-buffer":444,"./utils":445,"asn1":306,"assert-plus":307,"crypto":81,"safer-buffer":408}],444:[function(require,module,exports){
 // Copyright 2015 Joyent, Inc.
 
 module.exports = SSHBuffer;
@@ -129575,7 +128926,7 @@ SSHBuffer.prototype.write = function (buf) {
 	this._offset += buf.length;
 };
 
-},{"assert-plus":308,"safer-buffer":409}],446:[function(require,module,exports){
+},{"assert-plus":307,"safer-buffer":408}],445:[function(require,module,exports){
 // Copyright 2015 Joyent, Inc.
 
 module.exports = {
@@ -129981,7 +129332,7 @@ function opensshCipherInfo(cipher) {
 	return (inf);
 }
 
-},{"./algs":422,"./key":442,"./private-key":443,"asn1":307,"assert-plus":308,"crypto":81,"ecc-jsbn/lib/ec":321,"jsbn":368,"safer-buffer":409,"tweetnacl":456}],447:[function(require,module,exports){
+},{"./algs":421,"./key":441,"./private-key":442,"asn1":306,"assert-plus":307,"crypto":81,"ecc-jsbn/lib/ec":320,"jsbn":367,"safer-buffer":408,"tweetnacl":455}],446:[function(require,module,exports){
 "use strict";
 
 function hash(str) {
@@ -130000,7 +129351,7 @@ function hash(str) {
 
 module.exports = hash;
 
-},{}],448:[function(require,module,exports){
+},{}],447:[function(require,module,exports){
 /*!
  * Copyright (c) 2015, Salesforce.com, Inc.
  * All rights reserved.
@@ -131484,7 +130835,7 @@ exports.permuteDomain = require('./permuteDomain').permuteDomain;
 exports.permutePath = permutePath;
 exports.canonicalDomain = canonicalDomain;
 
-},{"./memstore":449,"./pathMatch":450,"./permuteDomain":451,"./pubsuffix-psl":452,"./store":453,"./version":454,"net":1,"punycode":195,"url":248,"util":253}],449:[function(require,module,exports){
+},{"./memstore":448,"./pathMatch":449,"./permuteDomain":450,"./pubsuffix-psl":451,"./store":452,"./version":453,"net":1,"punycode":195,"url":248,"util":253}],448:[function(require,module,exports){
 /*!
  * Copyright (c) 2015, Salesforce.com, Inc.
  * All rights reserved.
@@ -131667,7 +131018,7 @@ MemoryCookieStore.prototype.getAllCookies = function(cb) {
   cb(null, cookies);
 };
 
-},{"./pathMatch":450,"./permuteDomain":451,"./store":453,"util":253}],450:[function(require,module,exports){
+},{"./pathMatch":449,"./permuteDomain":450,"./store":452,"util":253}],449:[function(require,module,exports){
 /*!
  * Copyright (c) 2015, Salesforce.com, Inc.
  * All rights reserved.
@@ -131730,7 +131081,7 @@ function pathMatch (reqPath, cookiePath) {
 
 exports.pathMatch = pathMatch;
 
-},{}],451:[function(require,module,exports){
+},{}],450:[function(require,module,exports){
 /*!
  * Copyright (c) 2015, Salesforce.com, Inc.
  * All rights reserved.
@@ -131788,7 +131139,7 @@ function permuteDomain (domain) {
 
 exports.permuteDomain = permuteDomain;
 
-},{"./pubsuffix-psl":452}],452:[function(require,module,exports){
+},{"./pubsuffix-psl":451}],451:[function(require,module,exports){
 /*!
  * Copyright (c) 2018, Salesforce.com, Inc.
  * All rights reserved.
@@ -131828,7 +131179,7 @@ function getPublicSuffix(domain) {
 
 exports.getPublicSuffix = getPublicSuffix;
 
-},{"psl":389}],453:[function(require,module,exports){
+},{"psl":388}],452:[function(require,module,exports){
 /*!
  * Copyright (c) 2015, Salesforce.com, Inc.
  * All rights reserved.
@@ -131905,11 +131256,11 @@ Store.prototype.getAllCookies = function(cb) {
   throw new Error('getAllCookies is not implemented (therefore jar cannot be serialized)');
 };
 
-},{}],454:[function(require,module,exports){
+},{}],453:[function(require,module,exports){
 // generated by genversion
 module.exports = '2.5.0'
 
-},{}],455:[function(require,module,exports){
+},{}],454:[function(require,module,exports){
 (function (process){(function (){
 'use strict'
 
@@ -132157,7 +131508,7 @@ if (process.env.NODE_DEBUG && /\btunnel\b/.test(process.env.NODE_DEBUG)) {
 exports.debug = debug // for test
 
 }).call(this)}).call(this,require('_process'))
-},{"_process":187,"assert":18,"events":114,"http":227,"https":150,"net":1,"safe-buffer":408,"tls":1,"util":253}],456:[function(require,module,exports){
+},{"_process":187,"assert":18,"events":114,"http":227,"https":150,"net":1,"safe-buffer":407,"tls":1,"util":253}],455:[function(require,module,exports){
 (function(nacl) {
 'use strict';
 
@@ -134547,7 +133898,7 @@ nacl.setPRNG = function(fn) {
 
 })(typeof module !== 'undefined' && module.exports ? module.exports : (self.nacl = self.nacl || {}));
 
-},{"crypto":26}],457:[function(require,module,exports){
+},{"crypto":26}],456:[function(require,module,exports){
 /** @license URI.js v4.4.0 (c) 2011 Gary Court. License: http://github.com/garycourt/uri-js */
 (function (global, factory) {
 	typeof exports === 'object' && typeof module !== 'undefined' ? factory(exports) :
@@ -135992,7 +135343,7 @@ Object.defineProperty(exports, '__esModule', { value: true });
 })));
 
 
-},{}],458:[function(require,module,exports){
+},{}],457:[function(require,module,exports){
 /**
  * Convert array of 16 byte values to UUID string format of the form:
  * XXXXXXXX-XXXX-XXXX-XXXX-XXXXXXXXXXXX
@@ -136020,7 +135371,7 @@ function bytesToUuid(buf, offset) {
 
 module.exports = bytesToUuid;
 
-},{}],459:[function(require,module,exports){
+},{}],458:[function(require,module,exports){
 // Unique ID creation requires a high quality random # generator.  In the
 // browser this is a little complicated due to unknown quality of Math.random()
 // and inconsistent support for the `crypto` API.  We do the best we can via
@@ -136056,7 +135407,7 @@ if (getRandomValues) {
   };
 }
 
-},{}],460:[function(require,module,exports){
+},{}],459:[function(require,module,exports){
 var rng = require('./lib/rng');
 var bytesToUuid = require('./lib/bytesToUuid');
 
@@ -136087,7 +135438,7 @@ function v4(options, buf, offset) {
 
 module.exports = v4;
 
-},{"./lib/bytesToUuid":458,"./lib/rng":459}],461:[function(require,module,exports){
+},{"./lib/bytesToUuid":457,"./lib/rng":458}],460:[function(require,module,exports){
 /*
  * verror.js: richer JavaScript errors
  */
@@ -136540,7 +135891,7 @@ WError.prototype.cause = function we_cause(c)
 	return (this.jse_cause);
 };
 
-},{"assert-plus":308,"core-util-is":316,"extsprintf":327,"util":253}],462:[function(require,module,exports){
+},{"assert-plus":307,"core-util-is":315,"extsprintf":326,"util":253}],461:[function(require,module,exports){
 'use strict';
 
 module.exports = function () {
@@ -136550,7 +135901,7 @@ module.exports = function () {
   );
 };
 
-},{}],463:[function(require,module,exports){
+},{}],462:[function(require,module,exports){
 // Generated by CoffeeScript 1.12.7
 (function() {
   "use strict";
@@ -136564,7 +135915,7 @@ module.exports = function () {
 
 }).call(this);
 
-},{}],464:[function(require,module,exports){
+},{}],463:[function(require,module,exports){
 // Generated by CoffeeScript 1.12.7
 (function() {
   "use strict";
@@ -136693,7 +136044,7 @@ module.exports = function () {
 
 }).call(this);
 
-},{"./defaults":465,"xmlbuilder":501}],465:[function(require,module,exports){
+},{"./defaults":464,"xmlbuilder":500}],464:[function(require,module,exports){
 // Generated by CoffeeScript 1.12.7
 (function() {
   exports.defaults = {
@@ -136767,7 +136118,7 @@ module.exports = function () {
 
 }).call(this);
 
-},{}],466:[function(require,module,exports){
+},{}],465:[function(require,module,exports){
 // Generated by CoffeeScript 1.12.7
 (function() {
   "use strict";
@@ -137150,7 +136501,7 @@ module.exports = function () {
 
 }).call(this);
 
-},{"./bom":463,"./defaults":465,"./processors":467,"events":114,"sax":410,"timers":247}],467:[function(require,module,exports){
+},{"./bom":462,"./defaults":464,"./processors":466,"events":114,"sax":409,"timers":247}],466:[function(require,module,exports){
 // Generated by CoffeeScript 1.12.7
 (function() {
   "use strict";
@@ -137186,7 +136537,7 @@ module.exports = function () {
 
 }).call(this);
 
-},{}],468:[function(require,module,exports){
+},{}],467:[function(require,module,exports){
 // Generated by CoffeeScript 1.12.7
 (function() {
   "use strict";
@@ -137227,7 +136578,7 @@ module.exports = function () {
 
 }).call(this);
 
-},{"./builder":464,"./defaults":465,"./parser":466,"./processors":467}],469:[function(require,module,exports){
+},{"./builder":463,"./defaults":464,"./parser":465,"./processors":466}],468:[function(require,module,exports){
 // Generated by CoffeeScript 1.12.7
 (function() {
   module.exports = {
@@ -137241,7 +136592,7 @@ module.exports = function () {
 
 }).call(this);
 
-},{}],470:[function(require,module,exports){
+},{}],469:[function(require,module,exports){
 // Generated by CoffeeScript 1.12.7
 (function() {
   module.exports = {
@@ -137266,7 +136617,7 @@ module.exports = function () {
 
 }).call(this);
 
-},{}],471:[function(require,module,exports){
+},{}],470:[function(require,module,exports){
 // Generated by CoffeeScript 1.12.7
 (function() {
   var assign, getValue, isArray, isEmpty, isFunction, isObject, isPlainObject,
@@ -137351,7 +136702,7 @@ module.exports = function () {
 
 }).call(this);
 
-},{}],472:[function(require,module,exports){
+},{}],471:[function(require,module,exports){
 // Generated by CoffeeScript 1.12.7
 (function() {
   module.exports = {
@@ -137363,7 +136714,7 @@ module.exports = function () {
 
 }).call(this);
 
-},{}],473:[function(require,module,exports){
+},{}],472:[function(require,module,exports){
 // Generated by CoffeeScript 1.12.7
 (function() {
   var NodeType, XMLAttribute, XMLNode;
@@ -137473,7 +136824,7 @@ module.exports = function () {
 
 }).call(this);
 
-},{"./NodeType":470,"./XMLNode":492}],474:[function(require,module,exports){
+},{"./NodeType":469,"./XMLNode":491}],473:[function(require,module,exports){
 // Generated by CoffeeScript 1.12.7
 (function() {
   var NodeType, XMLCData, XMLCharacterData,
@@ -137511,7 +136862,7 @@ module.exports = function () {
 
 }).call(this);
 
-},{"./NodeType":470,"./XMLCharacterData":475}],475:[function(require,module,exports){
+},{"./NodeType":469,"./XMLCharacterData":474}],474:[function(require,module,exports){
 // Generated by CoffeeScript 1.12.7
 (function() {
   var XMLCharacterData, XMLNode,
@@ -137592,7 +136943,7 @@ module.exports = function () {
 
 }).call(this);
 
-},{"./XMLNode":492}],476:[function(require,module,exports){
+},{"./XMLNode":491}],475:[function(require,module,exports){
 // Generated by CoffeeScript 1.12.7
 (function() {
   var NodeType, XMLCharacterData, XMLComment,
@@ -137630,7 +136981,7 @@ module.exports = function () {
 
 }).call(this);
 
-},{"./NodeType":470,"./XMLCharacterData":475}],477:[function(require,module,exports){
+},{"./NodeType":469,"./XMLCharacterData":474}],476:[function(require,module,exports){
 // Generated by CoffeeScript 1.12.7
 (function() {
   var XMLDOMConfiguration, XMLDOMErrorHandler, XMLDOMStringList;
@@ -137696,7 +137047,7 @@ module.exports = function () {
 
 }).call(this);
 
-},{"./XMLDOMErrorHandler":478,"./XMLDOMStringList":480}],478:[function(require,module,exports){
+},{"./XMLDOMErrorHandler":477,"./XMLDOMStringList":479}],477:[function(require,module,exports){
 // Generated by CoffeeScript 1.12.7
 (function() {
   var XMLDOMErrorHandler;
@@ -137714,7 +137065,7 @@ module.exports = function () {
 
 }).call(this);
 
-},{}],479:[function(require,module,exports){
+},{}],478:[function(require,module,exports){
 // Generated by CoffeeScript 1.12.7
 (function() {
   var XMLDOMImplementation;
@@ -137748,7 +137099,7 @@ module.exports = function () {
 
 }).call(this);
 
-},{}],480:[function(require,module,exports){
+},{}],479:[function(require,module,exports){
 // Generated by CoffeeScript 1.12.7
 (function() {
   var XMLDOMStringList;
@@ -137778,7 +137129,7 @@ module.exports = function () {
 
 }).call(this);
 
-},{}],481:[function(require,module,exports){
+},{}],480:[function(require,module,exports){
 // Generated by CoffeeScript 1.12.7
 (function() {
   var NodeType, XMLDTDAttList, XMLNode,
@@ -137835,7 +137186,7 @@ module.exports = function () {
 
 }).call(this);
 
-},{"./NodeType":470,"./XMLNode":492}],482:[function(require,module,exports){
+},{"./NodeType":469,"./XMLNode":491}],481:[function(require,module,exports){
 // Generated by CoffeeScript 1.12.7
 (function() {
   var NodeType, XMLDTDElement, XMLNode,
@@ -137875,7 +137226,7 @@ module.exports = function () {
 
 }).call(this);
 
-},{"./NodeType":470,"./XMLNode":492}],483:[function(require,module,exports){
+},{"./NodeType":469,"./XMLNode":491}],482:[function(require,module,exports){
 // Generated by CoffeeScript 1.12.7
 (function() {
   var NodeType, XMLDTDEntity, XMLNode, isObject,
@@ -137974,7 +137325,7 @@ module.exports = function () {
 
 }).call(this);
 
-},{"./NodeType":470,"./Utility":471,"./XMLNode":492}],484:[function(require,module,exports){
+},{"./NodeType":469,"./Utility":470,"./XMLNode":491}],483:[function(require,module,exports){
 // Generated by CoffeeScript 1.12.7
 (function() {
   var NodeType, XMLDTDNotation, XMLNode,
@@ -138028,7 +137379,7 @@ module.exports = function () {
 
 }).call(this);
 
-},{"./NodeType":470,"./XMLNode":492}],485:[function(require,module,exports){
+},{"./NodeType":469,"./XMLNode":491}],484:[function(require,module,exports){
 // Generated by CoffeeScript 1.12.7
 (function() {
   var NodeType, XMLDeclaration, XMLNode, isObject,
@@ -138073,7 +137424,7 @@ module.exports = function () {
 
 }).call(this);
 
-},{"./NodeType":470,"./Utility":471,"./XMLNode":492}],486:[function(require,module,exports){
+},{"./NodeType":469,"./Utility":470,"./XMLNode":491}],485:[function(require,module,exports){
 // Generated by CoffeeScript 1.12.7
 (function() {
   var NodeType, XMLDTDAttList, XMLDTDElement, XMLDTDEntity, XMLDTDNotation, XMLDocType, XMLNamedNodeMap, XMLNode, isObject,
@@ -138261,7 +137612,7 @@ module.exports = function () {
 
 }).call(this);
 
-},{"./NodeType":470,"./Utility":471,"./XMLDTDAttList":481,"./XMLDTDElement":482,"./XMLDTDEntity":483,"./XMLDTDNotation":484,"./XMLNamedNodeMap":491,"./XMLNode":492}],487:[function(require,module,exports){
+},{"./NodeType":469,"./Utility":470,"./XMLDTDAttList":480,"./XMLDTDElement":481,"./XMLDTDEntity":482,"./XMLDTDNotation":483,"./XMLNamedNodeMap":490,"./XMLNode":491}],486:[function(require,module,exports){
 // Generated by CoffeeScript 1.12.7
 (function() {
   var NodeType, XMLDOMConfiguration, XMLDOMImplementation, XMLDocument, XMLNode, XMLStringWriter, XMLStringifier, isPlainObject,
@@ -138505,7 +137856,7 @@ module.exports = function () {
 
 }).call(this);
 
-},{"./NodeType":470,"./Utility":471,"./XMLDOMConfiguration":477,"./XMLDOMImplementation":479,"./XMLNode":492,"./XMLStringWriter":497,"./XMLStringifier":498}],488:[function(require,module,exports){
+},{"./NodeType":469,"./Utility":470,"./XMLDOMConfiguration":476,"./XMLDOMImplementation":478,"./XMLNode":491,"./XMLStringWriter":496,"./XMLStringifier":497}],487:[function(require,module,exports){
 // Generated by CoffeeScript 1.12.7
 (function() {
   var NodeType, WriterState, XMLAttribute, XMLCData, XMLComment, XMLDTDAttList, XMLDTDElement, XMLDTDEntity, XMLDTDNotation, XMLDeclaration, XMLDocType, XMLDocument, XMLDocumentCB, XMLElement, XMLProcessingInstruction, XMLRaw, XMLStringWriter, XMLStringifier, XMLText, getValue, isFunction, isObject, isPlainObject, ref,
@@ -139035,7 +138386,7 @@ module.exports = function () {
 
 }).call(this);
 
-},{"./NodeType":470,"./Utility":471,"./WriterState":472,"./XMLAttribute":473,"./XMLCData":474,"./XMLComment":476,"./XMLDTDAttList":481,"./XMLDTDElement":482,"./XMLDTDEntity":483,"./XMLDTDNotation":484,"./XMLDeclaration":485,"./XMLDocType":486,"./XMLDocument":487,"./XMLElement":490,"./XMLProcessingInstruction":494,"./XMLRaw":495,"./XMLStringWriter":497,"./XMLStringifier":498,"./XMLText":499}],489:[function(require,module,exports){
+},{"./NodeType":469,"./Utility":470,"./WriterState":471,"./XMLAttribute":472,"./XMLCData":473,"./XMLComment":475,"./XMLDTDAttList":480,"./XMLDTDElement":481,"./XMLDTDEntity":482,"./XMLDTDNotation":483,"./XMLDeclaration":484,"./XMLDocType":485,"./XMLDocument":486,"./XMLElement":489,"./XMLProcessingInstruction":493,"./XMLRaw":494,"./XMLStringWriter":496,"./XMLStringifier":497,"./XMLText":498}],488:[function(require,module,exports){
 // Generated by CoffeeScript 1.12.7
 (function() {
   var NodeType, XMLDummy, XMLNode,
@@ -139068,7 +138419,7 @@ module.exports = function () {
 
 }).call(this);
 
-},{"./NodeType":470,"./XMLNode":492}],490:[function(require,module,exports){
+},{"./NodeType":469,"./XMLNode":491}],489:[function(require,module,exports){
 // Generated by CoffeeScript 1.12.7
 (function() {
   var NodeType, XMLAttribute, XMLElement, XMLNamedNodeMap, XMLNode, getValue, isFunction, isObject, ref,
@@ -139368,7 +138719,7 @@ module.exports = function () {
 
 }).call(this);
 
-},{"./NodeType":470,"./Utility":471,"./XMLAttribute":473,"./XMLNamedNodeMap":491,"./XMLNode":492}],491:[function(require,module,exports){
+},{"./NodeType":469,"./Utility":470,"./XMLAttribute":472,"./XMLNamedNodeMap":490,"./XMLNode":491}],490:[function(require,module,exports){
 // Generated by CoffeeScript 1.12.7
 (function() {
   var XMLNamedNodeMap;
@@ -139428,7 +138779,7 @@ module.exports = function () {
 
 }).call(this);
 
-},{}],492:[function(require,module,exports){
+},{}],491:[function(require,module,exports){
 // Generated by CoffeeScript 1.12.7
 (function() {
   var DocumentPosition, NodeType, XMLCData, XMLComment, XMLDeclaration, XMLDocType, XMLDummy, XMLElement, XMLNamedNodeMap, XMLNode, XMLNodeList, XMLProcessingInstruction, XMLRaw, XMLText, getValue, isEmpty, isFunction, isObject, ref1,
@@ -140215,7 +139566,7 @@ module.exports = function () {
 
 }).call(this);
 
-},{"./DocumentPosition":469,"./NodeType":470,"./Utility":471,"./XMLCData":474,"./XMLComment":476,"./XMLDeclaration":485,"./XMLDocType":486,"./XMLDummy":489,"./XMLElement":490,"./XMLNamedNodeMap":491,"./XMLNodeList":493,"./XMLProcessingInstruction":494,"./XMLRaw":495,"./XMLText":499}],493:[function(require,module,exports){
+},{"./DocumentPosition":468,"./NodeType":469,"./Utility":470,"./XMLCData":473,"./XMLComment":475,"./XMLDeclaration":484,"./XMLDocType":485,"./XMLDummy":488,"./XMLElement":489,"./XMLNamedNodeMap":490,"./XMLNodeList":492,"./XMLProcessingInstruction":493,"./XMLRaw":494,"./XMLText":498}],492:[function(require,module,exports){
 // Generated by CoffeeScript 1.12.7
 (function() {
   var XMLNodeList;
@@ -140245,7 +139596,7 @@ module.exports = function () {
 
 }).call(this);
 
-},{}],494:[function(require,module,exports){
+},{}],493:[function(require,module,exports){
 // Generated by CoffeeScript 1.12.7
 (function() {
   var NodeType, XMLCharacterData, XMLProcessingInstruction,
@@ -140296,7 +139647,7 @@ module.exports = function () {
 
 }).call(this);
 
-},{"./NodeType":470,"./XMLCharacterData":475}],495:[function(require,module,exports){
+},{"./NodeType":469,"./XMLCharacterData":474}],494:[function(require,module,exports){
 // Generated by CoffeeScript 1.12.7
 (function() {
   var NodeType, XMLNode, XMLRaw,
@@ -140333,7 +139684,7 @@ module.exports = function () {
 
 }).call(this);
 
-},{"./NodeType":470,"./XMLNode":492}],496:[function(require,module,exports){
+},{"./NodeType":469,"./XMLNode":491}],495:[function(require,module,exports){
 // Generated by CoffeeScript 1.12.7
 (function() {
   var NodeType, WriterState, XMLStreamWriter, XMLWriterBase,
@@ -140511,7 +139862,7 @@ module.exports = function () {
 
 }).call(this);
 
-},{"./NodeType":470,"./WriterState":472,"./XMLWriterBase":500}],497:[function(require,module,exports){
+},{"./NodeType":469,"./WriterState":471,"./XMLWriterBase":499}],496:[function(require,module,exports){
 // Generated by CoffeeScript 1.12.7
 (function() {
   var XMLStringWriter, XMLWriterBase,
@@ -140548,7 +139899,7 @@ module.exports = function () {
 
 }).call(this);
 
-},{"./XMLWriterBase":500}],498:[function(require,module,exports){
+},{"./XMLWriterBase":499}],497:[function(require,module,exports){
 // Generated by CoffeeScript 1.12.7
 (function() {
   var XMLStringifier,
@@ -140790,7 +140141,7 @@ module.exports = function () {
 
 }).call(this);
 
-},{}],499:[function(require,module,exports){
+},{}],498:[function(require,module,exports){
 // Generated by CoffeeScript 1.12.7
 (function() {
   var NodeType, XMLCharacterData, XMLText,
@@ -140861,7 +140212,7 @@ module.exports = function () {
 
 }).call(this);
 
-},{"./NodeType":470,"./XMLCharacterData":475}],500:[function(require,module,exports){
+},{"./NodeType":469,"./XMLCharacterData":474}],499:[function(require,module,exports){
 // Generated by CoffeeScript 1.12.7
 (function() {
   var NodeType, WriterState, XMLCData, XMLComment, XMLDTDAttList, XMLDTDElement, XMLDTDEntity, XMLDTDNotation, XMLDeclaration, XMLDocType, XMLDummy, XMLElement, XMLProcessingInstruction, XMLRaw, XMLText, XMLWriterBase, assign,
@@ -141291,7 +140642,7 @@ module.exports = function () {
 
 }).call(this);
 
-},{"./NodeType":470,"./Utility":471,"./WriterState":472,"./XMLCData":474,"./XMLComment":476,"./XMLDTDAttList":481,"./XMLDTDElement":482,"./XMLDTDEntity":483,"./XMLDTDNotation":484,"./XMLDeclaration":485,"./XMLDocType":486,"./XMLDummy":489,"./XMLElement":490,"./XMLProcessingInstruction":494,"./XMLRaw":495,"./XMLText":499}],501:[function(require,module,exports){
+},{"./NodeType":469,"./Utility":470,"./WriterState":471,"./XMLCData":473,"./XMLComment":475,"./XMLDTDAttList":480,"./XMLDTDElement":481,"./XMLDTDEntity":482,"./XMLDTDNotation":483,"./XMLDeclaration":484,"./XMLDocType":485,"./XMLDummy":488,"./XMLElement":489,"./XMLProcessingInstruction":493,"./XMLRaw":494,"./XMLText":498}],500:[function(require,module,exports){
 // Generated by CoffeeScript 1.12.7
 (function() {
   var NodeType, WriterState, XMLDOMImplementation, XMLDocument, XMLDocumentCB, XMLStreamWriter, XMLStringWriter, assign, isFunction, ref;
@@ -141358,4 +140709,653 @@ module.exports = function () {
 
 }).call(this);
 
-},{"./NodeType":470,"./Utility":471,"./WriterState":472,"./XMLDOMImplementation":479,"./XMLDocument":487,"./XMLDocumentCB":488,"./XMLStreamWriter":496,"./XMLStringWriter":497}]},{},[256]);
+},{"./NodeType":469,"./Utility":470,"./WriterState":471,"./XMLDOMImplementation":478,"./XMLDocument":486,"./XMLDocumentCB":487,"./XMLStreamWriter":495,"./XMLStringWriter":496}],501:[function(require,module,exports){
+var _ = require('lodash')
+var $ = require('jquery')
+
+const path = require('path')
+
+
+var limits = {}
+
+var ping
+
+
+const Notiflix = require('notiflix')
+
+notify()
+
+function notify() {
+    // Notiflix.Report.Info('Welcome', 'WebAlpha is currently under construction! :)', 'Enter');
+    Notiflix.Notify.Success('Pricing Server Connected');
+}
+
+
+var Client = require('node-rest-client').Client;
+var client = new Client();
+
+var orderbook = {
+    bids: {},
+    asks: {}
+}
+var updates = 0
+var lastUpdateId
+
+var distance = 10000
+var consolidation = 2
+var sizeThreshold = 50
+class SocketClient {
+    constructor(path, baseUrl) {
+        this.baseUrl = baseUrl || 'wss://stream.binance.com:9443/';
+        this._path = path;
+        this._createSocket();
+        this._handlers = new Map();
+    }
+
+    _createSocket() {
+        console.log(`${this.baseUrl}${this._path}`);
+
+        // // Create WebSocket connection.
+        // const socket = new WebSocket('ws://localhost:8080');
+
+        // // Connection opened
+        // socket.addEventListener('open', function(event) {
+        //     socket.send('Hello Server!');
+        // });
+
+        // // Listen for messages
+        // socket.addEventListener('message', function(event) {
+        //     console.log('Message from server ', event.data);
+        // });
+
+
+        this._ws = new WebSocket(`${this.baseUrl}${this._path}`);
+
+        this._ws.onopen = () => {
+            console.log('Binance ws connected');
+        };
+
+        // this.addEventListener.on('pong', () => {
+        //     // console.log('receieved pong from server');
+        // });
+        // this._ws.on('ping', () => {
+        //     //console.log('==========receieved ping from server');
+        //     this._ws.pong();
+        // });
+
+        // this._ws.onclose = () => {
+        //     console.log('ws closed');
+        // };
+
+        // this._ws.onerror = (err) => {
+        //     console.log('ws error', err);
+        // };
+
+        this._ws.onmessage = (msg) => {
+            try {
+                const message = JSON.parse(msg.data);
+                //console.log(message)
+                //check for orderbook, if empty retrieve snapshot
+                if (Object.keys(orderbook.bids).length == 0) {
+                    // @ts-ignore
+                    client.get('https://api.binance.com/api/v3/depth?symbol=BTCUSD&limit=100',
+                        function(data) {
+
+                            for (var i in data.bids) {
+                                var price = String(data.bids[i][0])
+                                var qty = Number(data.bids[i][1])
+                                orderbook.bids[price] = qty
+                            }
+                            for (var j in data.asks) {
+                                var price = String(data.asks[j][0])
+                                var qty = Number(data.asks[j][1])
+                                orderbook.asks[price] = qty
+                            }
+                            orderbook.lastUpdateId = data.lastUpdateId
+                            console.log(data)
+                        })
+                }
+
+                //get lastUpdateId
+                else {
+                    //console.log(orderbook)
+                    lastUpdateId = Number(orderbook.lastUpdateId)
+                        //console.log(message.U, message.u, lastUpdateId)
+                        //console.log(message.u)
+                    if (updates == 0) {
+                        if (message.U <= lastUpdateId && message.u >= lastUpdateId) {
+                            updates++
+                            //console.log('process this update')
+                            orderbook.lastUpdateId = message.u
+                            processUpdates(message)
+
+                        } else {
+                            console.log('discard this update', (message.U <= lastUpdateId), (message.u >=
+                                lastUpdateId))
+                            orderbook.lastUpdateId = message.u
+                        }
+                    } else if (message.pu == lastUpdateId) {
+                        //console.log('process this update')
+                        orderbook.lastUpdateId = message.u
+                        processUpdates(message)
+                    } else {
+                        console.log('Out of sync, abort')
+                        orderbook.lastUpdateId = message.u
+                    }
+                }
+            } catch (error) {
+                console.log(error)
+            }
+        };
+
+        this.heartBeat();
+    }
+
+    heartBeat() {
+        setInterval(() => {
+            if (this._ws.readyState === WebSocket.OPEN) {
+                // this._ws.ping();
+                //console.log("ping server");
+            }
+        }, 60000);
+    }
+
+    setHandler(method, callback) {
+        if (!this._handlers.has(method)) {
+            this._handlers.set(method, []);
+        }
+        this._handlers.get(method).push(callback);
+    }
+}
+
+async function processUpdates(data) {
+    for (var update in data['b']) {
+        manageOrderbook('bids', data['b'][update])
+    }
+    for (var update in data['a']) {
+        manageOrderbook('asks', data['a'][update])
+    }
+    updateTable(orderbook)
+
+}
+
+async function manageOrderbook(side, update) {
+    var price = String(update[0])
+    var qty = Number(update[1])
+        //console.log(price, qty)
+    if (qty == 0) {
+        delete orderbook[side][price]
+    } else {
+        orderbook[side][price] = qty
+    }
+}
+
+//Mapping
+var centrePrice = 0
+var renderDistance = 25
+
+function truncateObject(obj, num) {
+    var newObj = {}
+    var log = Object.entries(obj)
+    for (var j in log.slice(0, num)) {
+        newObj[log[j][0]] = log[j][1]
+    }
+    return newObj
+}
+
+function buildMap(obj) {
+    let map = new Map();
+    Object.keys(obj).forEach(key => {
+        map.set(key, obj[key]);
+    });
+    return map;
+}
+
+function truncateBidMap(map, num) {
+    var arrayTmp = Array.from(map).reverse().slice(0, num)
+    var newMap = new Map(arrayTmp)
+    return newMap
+}
+
+function truncateAskMap(map, num) {
+    var arrayTmp = Array.from(map).slice(0, num)
+    var newMap = new Map(arrayTmp)
+    return newMap
+}
+
+async function updateTable(orderbook) {
+    // FORMAT HTML TABLE
+    // CONSOLIDATE PRICES
+    var consolidatedBids = {}
+    var consolidatedAsks = {}
+
+    for (var j in orderbook.bids) {
+        price = Number(j)
+        consolidatedPrice = consolidate(price)
+        qty = Number(orderbook.bids[j])
+            //console.log(price, qty)
+        if (consolidatedPrice in consolidatedBids) {
+            consolidatedBids[consolidatedPrice] += qty
+        } else {
+            consolidatedBids[consolidatedPrice] = qty
+        }
+    }
+    for (var j in orderbook.asks) {
+        price = Number(j)
+        consolidatedPrice = consolidate(price)
+        qty = Number(orderbook.asks[j])
+
+        if (consolidatedPrice in consolidatedAsks) {
+            consolidatedAsks[consolidatedPrice] += qty
+        } else {
+            consolidatedAsks[consolidatedPrice] = qty
+        }
+    }
+
+    const mapbid = buildMap(consolidatedBids)
+    var bidMap = truncateBidMap(mapbid, renderDistance)
+
+    const askbid = buildMap(consolidatedAsks)
+    var askMap = truncateAskMap(askbid, renderDistance)
+
+    console.log(consildatedBids)
+    let html = `<table>`
+    html +=
+        `<tr><th colspan="1">DOM</th><th colspan="1">Bids</th><th colspan="1">BTCUSDT</th><th colspan="1">Asks</th><th colspan="1">T: ${numberTrades}</th></tr>`
+    for (var i = centrePrice + 100; i > centrePrice - 100; i -= consolidation) {
+        if (consolidate(lastPrice.price) == i) {
+            var directionColour = lastPrice.direction ? "#D23830" : "#0F969E"
+            if (i in consolidatedBids) {
+                // BEST BID
+                html += `<tr>
+                        <td>
+                        <div class="meterBids">
+                        <span style="width: ${consolidatedBids[i]}%"></span>
+                        </div>
+                        </td>`
+
+
+                if (bidMap.get(String(i)).toFixed(3) > sizeThreshold) {
+                    html +=
+                        `<td style="background-color:gold;" class=bestBidCol2 onclick="BinanceFBuy(${i})">${bidMap.get(String(i)).toFixed(3)}</td>`
+
+
+                } else {
+                    html +=
+                        `<td class=bestBidCol2 onclick="BinanceFBuy(${i})">${bidMap.get(String(i)).toFixed(3)}</td>`
+                }
+
+                if (BinanceEntryPrice === i) {
+                    html += `<td style="background-color: blue; color: white;">${i + " " + PNLP1}</td>`
+                } else {
+                    html += `<td class=bestBidCol3>${i}</td>`
+                }
+
+                html += `<td class=bestBidCol4 onclick="BinanceFSell(${i})"></td>`
+                html +=
+                    `<td id="centerPrice" style="background-color:${directionColour}; color:white;">${lastPrice.qty}</td>`
+
+            } else if (i in consolidatedAsks) {
+                html += `<tr>
+            <td>
+            <div class="meterAsks">
+              <span style="width: ${consolidatedAsks[i]}%"></span>
+            </div>
+            </td>`
+
+                html += `<td class=bestAskCol2 onclick="BinanceFBuy(${i})"></td>`
+                if (BinanceEntryPrice === i) {
+                    html += `<td style="background-color: blue; color: white;">${i + " " + PNLP1}</td>`
+                } else {
+                    html += `<td class=bestAskCol3>${i}</td>`
+                }
+                html +=
+                    `<td class=askCol4 onclick="BinanceFSell(${i})">${askMap.get(String(i)).toFixed(3)}</td>`
+                html +=
+                    `<td id="centerPrice" style="background-color:${directionColour}; color:white;">${lastPrice.qty}</td>`
+            } else {
+                // No bids/asks
+                html += `<tr>
+            <td></td>
+            <td></td>
+            <td class=bestNBACol2></td>
+            <td class=bestNBACol3">${i}</td>
+            <td class=bestNBACol4></td>
+            <td></td>
+            </tr>`
+            }
+        } else {
+            if (i in consolidatedBids && volumeProfileObject && bidMap.has(String(i))) {
+                // BIDS
+                //console.log(i)
+                html += `<tr>
+            <td>
+            <div class="meterBids">
+              <span style="width: ${consolidatedBids[i]}%;"></span>
+            </div>
+            </td>`
+
+
+                if (bidMap.get(String(i)).toFixed(3) > sizeThreshold) {
+                    html +=
+                        `<td style="background-color:gold;" onclick="BinanceFBuy(${i})">${bidMap.get(String(i)).toFixed(3)}</td>`
+
+
+                } else {
+                    html +=
+                        `<td class=bidCol2 onclick="BinanceFBuy(${i})">${bidMap.get(String(i)).toFixed(3)}</td>`
+                }
+
+
+                if (parseInt((candleData.low / consolidation) * consolidation) === i) {
+                    html +=
+                        `<td style="background-color: purple; color: white; outline: 2px dashed blue;">${i}(L)</td>`
+                } else if (BinanceEntryPrice === i && Amount > 0) {
+                    html += `<td style="background-color: blue; color: white;">${i + " " + PNLP1}</td>`
+                } else if (BinanceEntryPrice === i && Amount < 0) {
+                    html += `<td style="background-color: red; color: white;">${i + " " + PNLP1}</td>`
+                } else {
+                    html += `<td class=bidCol3>${i}</td>`
+                }
+
+                html += `<td class=bidCol4 onclick="BinanceFSell(${i})"></td>
+            <td>                
+            <div class="meterAccBids">`
+                if (volumeProfileObject[i] > 0) {
+                    html += `<span class=bestBidCol5 style="width: ${volumeProfileObject[i]}%;"></span>`
+                } else {
+                    `<span style="width: 0%"></span>`
+                }
+                html += `</div>
+                  </td>
+                  </tr>`
+
+            } else if (i in consolidatedAsks && volumeProfileObject && askMap.has(String(i))) {
+                // ASKS
+
+                html += `<tr>
+            <td>
+            <div class="meterAsks">
+              <span style="width: ${consolidatedAsks[i]}%; border-left: 0px; border-right: 0px;"></span>
+            </div>
+            </td>`
+
+
+
+                html += `<td class=askCol2 onclick="BinanceFBuy(${i})"></td>`
+
+                if (parseInt((candleData.high / consolidation) * consolidation) === i) {
+                    html +=
+                        `<td style="background-color: purple; color: white; outline: 2px dashed blue;">${i}(H)</td>`
+                } else if (BinanceEntryPrice === i && Amount > 0) {
+                    html += `<td style="background-color: blue; color: white;">${i + " " + PNLP1}</td>`
+                } else if (BinanceEntryPrice === i && Amount < 0) {
+                    html += `<td style="background-color: red; color: white;">${i + " " + PNLP1}</td>`
+                } else {
+                    html += `<td class=bidCol3>${i}</td>`
+                }
+
+                if (askMap.get(String(i)).toFixed(3) > sizeThreshold) {
+                    html +=
+                        `<td style="background-color:gold;" onclick="BinanceFSell(${i})">${askMap.get(String(i)).toFixed(3)}</td>`
+                } else {
+                    html +=
+                        `<td class=askCol4 onclick="BinanceFSell(${i})">${askMap.get(String(i)).toFixed(3)}</td>`
+                }
+                html += `<td><div class="meterAccBids">`
+                if (volumeProfileObject[i] > 0) {
+                    html += `<span class=askCol5 style="width: ${volumeProfileObject[i]}%;"></span>`
+                } else {
+                    `<span style="width: 0%"></span>`
+                }
+                html += `</div>
+                  </td>
+                  </tr>`
+
+            } else {
+                // No bids/asks
+                html += `<tr>
+            <td></td>`
+
+
+
+                html += `<td class=askCol2 onclick="BinanceFBuy(${i})"></td>`
+                if (parseInt(candleData.high / consolidation) * consolidation === i) {
+                    html +=
+                        `<td style="background-color: purple; color: white; outline: 2px dashed blue;">${i}(H)</td>`
+                } else if (parseInt(candleData.low / consolidation) * consolidation === i) {
+                    html +=
+                        `<td style="background-color: purple; color: white; outline: 2px dashed blue;">${i}(L)</td>`
+                } else if (BinanceEntryPrice === i && Amount > 0) {
+                    html += `<td style="background-color: blue; color: white;">${i + " " + PNLP1}</td>`
+                } else if (BinanceEntryPrice === i && Amount < 0) {
+                    html += `<td style="background-color: red; color: white;">${i + " " + PNLP1}</td>`
+                } else {
+                    html += `<td class=bidCol3>${i}</td>`
+                }
+
+                html += `<td class=NBACol4 onclick="BinanceFSell(${i})"></td>
+            <td></td>
+            </tr>`
+            }
+        }
+    }
+    html += '</table>'
+        //console.log(html)
+    document.getElementById("btcSpotLadder").innerHTML = html;
+}
+// document.getElementById("headerAccBids").innerHTML = sum(consolidatedBids).toFixed(0);
+// document.getElementById("headerAccAsks").innerHTML = sum(consolidatedAsks).toFixed(0);
+
+// ping = Number(Date.now())-Number(candleData.time)
+// //console.log(ping)
+// document.getElementById("ping").innerHTML = ping+"ms";
+
+
+
+// function sum(obj) {
+//     var sum = 0;
+//     for (var el in obj) {
+//       if (obj.hasOwnProperty(el)) {
+//         sum += parseFloat(obj[el]);
+//       }
+//     }
+//     return sum;
+//   }
+
+// function sendStats() {
+
+//     console.log(localStorage.APIKEYSTORAGE)
+
+//     //SEND HEADER STATS
+//     // document.getElementById("headerLastPrice").innerHTML = lastPrice.price;
+//     // document.getElementById("headerOpen").innerHTML = candleData.open;
+//     document.getElementById("headerHigh").innerHTML = candleData.high;
+//     document.getElementById("headerLow").innerHTML = candleData.low;
+//     document.getElementById("headerVolume").innerHTML = candleData.vol;
+//     // document.getElementById("timeLeft").innerHTML = timeleft;
+
+//     if (percentageChange > 0) {
+//         document.getElementById("headerPercentageChange").innerHTML = percentageChange + "% " + pointChange;
+//         document.getElementById("headerPercentageChange").style.color = "limegreen"
+//     } else {
+//         document.getElementById("headerPercentageChange").innerHTML = percentageChange + "% " + pointChange;
+//         document.getElementById("headerPercentageChange").style.color = "#D23830"
+//     }
+
+//     if (Amount < 0) {
+//         document.getElementById("posSize").style.color = "red"
+//     } else if (Amount > 0) {
+//         document.getElementById("posSize").style.color = "blue"
+//     } else if (Amount === 0.000) {
+//         document.getElementById("posSize").style.color = "black"
+//     }
+//     document.getElementById('posSize').value = Amount;
+//     document.getElementById('balance').innerHTML = Number(wallet).toFixed(2);
+//     document.getElementById('bnb').innerHTML = Number(bnb).toFixed(2);
+//     document.getElementById('urpl').innerHTML = Number(urpl).toFixed(2);
+//     document.getElementById('urwb').innerHTML = Number(wallet + urpl).toFixed(2);
+// }
+// setInterval(sendStats, 500)
+
+function consolidate(price) {
+    return parseInt(price / consolidation) * consolidation
+}
+
+const Binance = require('node-binance-api');
+const binance = new Binance().options({
+    APIKEY: ``,
+    // APIKEY: localStorage.APIKEYSTORAGE,
+    APISECRET: ``
+        // APISECRET: localStorage.APISECRETSTORAGE
+});
+
+const socketApi = new SocketClient(`ws/btcusd@depth@100ms`, 'wss://stream.binance.com:9443/');
+
+BinanceEntryPrice = 10000
+
+// async function getBinancePositionStats() {
+
+//     async function asyncCall() {
+//         var response = (await binance.futuresPositionRisk());
+//         const result = await resolveAfter2Seconds();
+//         console.log(response.BTCUSDT)
+//         Amount = response.BTCUSDT.positionAmt
+//         Entry = (response.BTCUSDT.entryPrice)
+//         BinanceEntryPrice = parseInt(Entry / consolidation) * consolidation
+//         MarkPrice = Number(response.BTCUSDT.markPrice)
+//         PNLP1 = Number(MarkPrice - BinanceEntryPrice).toFixed(1)
+//         urpl = Number(response.BTCUSDT.unRealizedProfit)
+//     }
+//     asyncCall(); //
+//     async function resolveAfter2Seconds() {
+//         return new Promise(resolve => {
+//             setTimeout(() => {
+//                 resolve('Complete!');
+//             }, 0);
+//         });
+//     }
+// }
+// setInterval(getBinancePositionStats, 1000)
+
+
+
+//WEBSOCKETS
+
+// Create WebSocket connection.
+const socket = new WebSocket('wss://fstream.binance.com/ws/btcusdt@trade');
+// Connection opened
+socket.addEventListener('open', function(event) {
+    socket.send('Hello Server!');
+});
+
+
+// Listen for messages
+var lastPrice = {}
+socket.addEventListener('message', function(event) {
+
+    const trade = JSON.parse(event.data);
+    lastPrice = {
+        price: trade.p,
+        qty: trade.q,
+        direction: trade.m
+    }
+});
+
+
+// Create WebSocket connection.
+const socket1 = new WebSocket('wss://fstream.binance.com/ws/btcusdt@miniTicker');
+// Connection opened
+socket1.addEventListener('open', function(event) {
+    socket1.send('Hello Server!');
+});
+
+var candleData = {}
+socket1.addEventListener('message', function(event) {
+
+    const miniTicker = JSON.parse(event.data);
+    //console.log(miniTicker)
+    candleData = {
+        open: miniTicker.o,
+        high: miniTicker.h,
+        low: Number(miniTicker.l),
+        vol: miniTicker.v,
+        time: miniTicker.E
+    }
+});
+
+
+var percentageChange
+var pointChange
+var numberTrades
+    // Create WebSocket connection.
+const socket2 = new WebSocket('wss://fstream.binance.com/ws/btcusdt@ticker');
+// Connection opened
+socket2.addEventListener('open', function(event) {
+    socket2.send('Hello Server!');
+});
+socket2.addEventListener('message', function(event) {
+    const Ticker = JSON.parse(event.data);
+    //console.log(Ticker)
+    percentageChange = Ticker.P
+    pointChange = (Number(Ticker.p)).toFixed(0)
+    numberTrades = Ticker.n
+});
+
+
+
+
+var volumeProfileObject = {} //   prices : qty (denoted in BTC)
+var price
+var rawprice
+
+
+// Create WebSocket connection.
+const socket3 = new WebSocket('wss://fstream.binance.com/ws/btcusdt@aggTrade');
+// Connection opened
+socket3.addEventListener('open', function(event) {
+    socket3.send('Hello Server!');
+});
+
+
+
+socket3.addEventListener('message', function(event) {
+    const message = JSON.parse(event.data); // parsing single-trade record
+    //console.log(message)
+    rawprice = message.p
+    price = Math.round(Number(message.p) / consolidation) * consolidation;
+    if (volumeProfileObject[price] == undefined) {
+        volumeProfileObject[price] = Number(message.q)
+    } else {
+        volumeProfileObject[price] = (volumeProfileObject[price] + Number(message.q))
+    }
+    //console.log(volumeProfileObject)
+
+    //calculate center price
+    if (centrePrice == 0) {
+        centrePrice = price
+    }
+})
+
+
+
+function dimvalVP() {
+    for (var j in volumeProfileObject) {
+        if (volumeProfileObject[j] >= 150) {
+            for (var i in volumeProfileObject) {
+                volumeProfileObject[i] = volumeProfileObject[i] / 2
+            }
+        }
+    }
+
+}
+setInterval(dimvalVP, 500)
+
+
+
+function resetDistance() {
+    centrePrice = Math.round(Number(rawprice) / consolidation) * consolidation;
+    // Notiflix.Notify.Warning(`Recalculating Range`);
+}
+setInterval(resetDistance, distance)
+},{"jquery":366,"lodash":372,"node-binance-api":377,"node-rest-client":378,"notiflix":384,"path":180}]},{},[501]);

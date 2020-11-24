@@ -130,9 +130,9 @@ function RenderBinanceTOS() {
         // Find direction colour:
         var directionColour
         if (BinanceTOSData[i].m) {
-            directionColour = `<td style="background-color:${colour}; color: ${settings.BinanceTOS.downTickColour}">🡇</td>`
+            directionColour = `<td style="background-color:${colour}; color: ${settings.BinanceTOS.downTickColour}"><i class="ri-arrow-down-circle-fill"></i></td>`
         } else {
-            directionColour = `<td style="background-color:${colour}; color: ${settings.BinanceTOS.upTickColour}">🡅</td>`
+            directionColour = `<td style="background-color:${colour}; color: ${settings.BinanceTOS.upTickColour}"><i class="ri-arrow-up-circle-fill"></i></td>`
         }
 
         // Add data

@@ -14,7 +14,7 @@ const Notiflix = require('notiflix')
 notify()
 
 function notify() {
-    Notiflix.Report.Info('Welcome', 'WebAlpha is currently under construction! :)', 'Enter');
+    // Notiflix.Report.Info('Welcome', 'WebAlpha is currently under construction! :)', 'Enter');
     Notiflix.Notify.Success('Pricing Server Connected');
 }
 
@@ -34,7 +34,7 @@ var consolidation = 2
 var sizeThreshold = 50
 class SocketClient {
     constructor(path, baseUrl) {
-        this.baseUrl = baseUrl || 'wss://stream.binance.com/';
+        this.baseUrl = baseUrl || 'wss://stream.binance.com:9443/';
         this._path = path;
         this._createSocket();
         this._handlers = new Map();
@@ -86,7 +86,7 @@ class SocketClient {
                 //check for orderbook, if empty retrieve snapshot
                 if (Object.keys(orderbook.bids).length == 0) {
                     // @ts-ignore
-                    client.get('https://fapi.binance.com/fapi/v1/depth?symbol=BTCUSDT&limit=100',
+                    client.get('https://api.binance.com/api/v3/depth?symbol=BTCUSD&limit=100',
                         function(data) {
 
                             for (var i in data.bids) {
@@ -246,7 +246,7 @@ async function updateTable(orderbook) {
     const askbid = buildMap(consolidatedAsks)
     var askMap = truncateAskMap(askbid, renderDistance)
 
-
+    console.log(consildatedBids)
     let html = `<table>`
     html +=
         `<tr><th colspan="1">DOM</th><th colspan="1">Bids</th><th colspan="1">BTCUSDT</th><th colspan="1">Asks</th><th colspan="1">T: ${numberTrades}</th></tr>`
@@ -430,7 +430,7 @@ async function updateTable(orderbook) {
     }
     html += '</table>'
         //console.log(html)
-    document.getElementById("GUI").innerHTML = html;
+    document.getElementById("btcSpotLadder").innerHTML = html;
 }
 // document.getElementById("headerAccBids").innerHTML = sum(consolidatedBids).toFixed(0);
 // document.getElementById("headerAccAsks").innerHTML = sum(consolidatedAsks).toFixed(0);
@@ -492,13 +492,13 @@ function consolidate(price) {
 
 const Binance = require('node-binance-api');
 const binance = new Binance().options({
-    APIKEY: `2X6NwCa2uto2YSX0WSCKX1Xiyu2DzwzRd0AWA2M3YSyCHTVNAtDWearxekW7Eflt`,
+    APIKEY: ``,
     // APIKEY: localStorage.APIKEYSTORAGE,
-    APISECRET: `A7O6GaCv2YhNNveoOpgrN5kpFVyPpNyLMuRrDAxKb0IfAlpIugiDq7eG6XDZhJxM`
+    APISECRET: ``
         // APISECRET: localStorage.APISECRETSTORAGE
 });
 
-const socketApi = new SocketClient(`ws/btcusdt@depth@100ms`, 'wss://fstream3.binance.com/');
+const socketApi = new SocketClient(`ws/btcusd@depth@100ms`, 'wss://stream.binance.com:9443/');
 
 BinanceEntryPrice = 10000
 
