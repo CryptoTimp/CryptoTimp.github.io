@@ -19,11 +19,19 @@ settings = {
 }
 var exchangeObject = {
     Deribit: {},
-    Binance: {}
+    Binance: {},
+    FTX: {},
 }
 
 var liquidityObject = {}
 var spreadObject = {}
+
+
+
+
+
+
+
 
 var msg = {
     "jsonrpc": "2.0",
@@ -35,15 +43,15 @@ var msg = {
 };
 var ws = new WebSocket('wss://test.deribit.com/ws/api/v2');
 ws.onmessage = function(e) {
+    try {
+        // do something with the notifications...
+        response = JSON.parse(e.data)
 
-    // do something with the notifications...
-    response = JSON.parse(e.data)
-
-    exchangeObject.Deribit.bestBid = Number(response.params.data.best_bid_price)
-    exchangeObject.Deribit.bestAsk = Number(response.params.data.best_ask_price)
-    exchangeObject.Deribit.bestBidSize = Number(response.params.data.best_ask_amount)
-    exchangeObject.Deribit.bestAskSize = Number(response.params.data.best_ask_amount)
-
+        exchangeObject.Deribit.bestBid = Number(response.params.data.best_bid_price)
+        exchangeObject.Deribit.bestAsk = Number(response.params.data.best_ask_price)
+        exchangeObject.Deribit.bestBidSize = Number(response.params.data.best_ask_amount)
+        exchangeObject.Deribit.bestAskSize = Number(response.params.data.best_ask_amount)
+    } catch (error) {}
 };
 ws.onopen = function() {
     ws.send(JSON.stringify(msg));
@@ -66,6 +74,29 @@ socket.addEventListener('message', function(event) {
 
 });
 
+
+let msgFTX = {
+    "op": "subscribe",
+    "channel": "ticker",
+    "market": "BTC-PERP"
+}
+
+
+const wsFTX = new WebSocket('wss://ftx.com/ws/')
+
+wsFTX.onmessage = function(a) {
+    response1 = JSON.parse(a.data)
+
+    exchangeObject.FTX.bestBid = Number(response1.data.bid)
+    exchangeObject.FTX.bestAsk = Number(response1.data.ask)
+    exchangeObject.FTX.bestBidSize = Number(response1.data.bidSize)
+    exchangeObject.FTX.bestAskSize = Number(response1.data.askSize)
+
+
+}
+wsFTX.onopen = function() {
+    wsFTX.send(JSON.stringify(msgFTX));
+};
 
 //LIQUIDITY SCANNER
 function liquidityScanner() {
@@ -91,17 +122,27 @@ function calculateSpreads() {
             var spread = ((bid - ask) / bid) * 100
             if (x != y) { spreadObject[x + '-' + y] = spread.toFixed(3) }
 
-            xValues = [`Deribit`, `Binance`];
+            //console.log(spreadObject)
 
-            yValues = ['Deribit', 'Binance'];
+            xValues = [`Deribit`, `Binance`, `FTX`];
+
+            yValues = ['Deribit', 'Binance', `FTX`];
 
             zValues = [
+
                     [null,
+                        spreadObject["Deribit-FTX"],
                         spreadObject["Deribit-Binance"],
                     ],
 
                     [
                         spreadObject["Binance-Deribit"],
+                        null,
+                        spreadObject["Binance-FTX"],
+                    ],
+                    [
+                        spreadObject["FTX-Binance"],
+                        spreadObject["FTX-Deribit"],
                         null,
                     ],
                 ],
@@ -131,7 +172,7 @@ function calculateSpreads() {
             }];
 
             var layout = {
-                title: 'Exchange Spreads (%)',
+                title: 'Cross Exchange Spreads (%)',
                 annotations: [],
                 plot_bgcolor: "black",
                 paper_bgcolor: "black",
