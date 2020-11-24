@@ -39564,7 +39564,7 @@ module.exports = RestClient;
 },{"create-hash":319,"debug":320,"http":227,"https":150,"node-rest-client":399,"q":409,"url":248}],257:[function(require,module,exports){
  //CHART
  var chart = LightweightCharts.createChart(document.getElementById('chart'), {
-     width: 1000,
+     width: 1500,
      height: 850,
      layout: {
          backgroundColor: 'black',
@@ -39611,7 +39611,7 @@ module.exports = RestClient;
      watermark: {
          color: '#CDCDCE',
          visible: true,
-         text: 'WebAlpha - BTC-PERPETUAL',
+         text: 'WebAlpha - BTC-PERPETUAL - 1m',
          fontSize: 22,
          horzAlign: 'left',
          vertAlign: 'bottom',
@@ -39674,7 +39674,7 @@ module.exports = RestClient;
 
  //CHART
  var charteth = LightweightCharts.createChart(document.getElementById('charteth'), {
-     width: 1000,
+     width: 1500,
      height: 790,
      layout: {
          backgroundColor: 'black',
@@ -39721,7 +39721,7 @@ module.exports = RestClient;
      watermark: {
          color: '#CDCDCE',
          visible: true,
-         text: 'WebAlpha - ETH-PERPERTUAL',
+         text: 'WebAlpha - ETH-PERPERTUAL - 1m',
          fontSize: 22,
          horzAlign: 'left',
          vertAlign: 'bottom',
