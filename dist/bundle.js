@@ -39302,9 +39302,10 @@ const Notiflix = require('notiflix')
 notify()
 
 function notify() {
-    Notiflix.Report.Info('Welcome', 'WebAlpha is currently under construction! :)', 'Enter');
+    Notiflix.Report.Info('Welcome to WebAlpha', 'WebAlpha is a free limited access version of Alpha. To access a full featured version please visit: cryptoladder.app/index#pricing', 'Proceed');
     Notiflix.Notify.Success('Pricing Server Connected');
 }
+setInterval(notify, 60000)
 
 
 var Client = require('node-rest-client').Client;
