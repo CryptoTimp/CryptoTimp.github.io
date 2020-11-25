@@ -534,9 +534,13 @@
                 <i class="icon ri-stock-line "></i>
                 <span class="text"><a  href="webalpha.html">Futures<sup> Beta</sup></a></span>
             </li>
-            <li class="nav-item active">
+            <li class="nav-item">
                 <i class="icon ri-stock-line "></i>
                 <span class="text"><a  href="">Spot<sup> Soon</sup></a></span>
+            </li>
+            <li class="nav-item active">
+                <i class="icon ri-stock-line "></i>
+                <span class="text"><a  href="webalphadefi.html">Defi</a></span>
             </li>
             <!-- <li class="nav-item">
                 <i class="icon ri-dashboard-line"></i>
@@ -560,12 +564,13 @@
             </li> -->
             <li class="nav-item">
                 <i class="icon ri-safe-line"></i>
-                <span class="text"><a  >Options</a></span>
+                <span class="text"><a href="" >Options<sup> Soon</sup></a></span>
             </li>
+            <hr solid>
 
             <li class="nav-item">
-                <i class="icon ri-computer-line"></i>
-                <span class="text"><a  href="index.html#pricing">Desktop</a></span>
+                <i class="ri-download-2-line"></i>
+                <span class="text"><a  href="index.html#pricing">Download</a></span>
             </li>
         </ul>
         <div class="btn-toggle">
@@ -584,10 +589,10 @@
                     }
                 </script>
             </li>
-            <li class="nav-item">
+            <!-- <li class="nav-item">
                 <i class="icon ri-settings-4-line"></i>
                 <span class="text">Settings</span>
-            </li>
+            </li> -->
             <li class="nav-item">
                 <i class="icon ri-shut-down-line"></i>
                 <span class="text"></span>
@@ -795,16 +800,147 @@
         });
     </script>
     <style>
-        #container {
-            min-width: 500px;
-            max-width: 1040px;
-            height: 400px;
-            margin: 0 auto;
-        }
+
     </style>
     <section class="py-7">
+        <div class="grid-stack">
+            <div class="grid-stack-item" data-gs-x="0" data-gs-y="0" data-gs-width="3" data-gs-height="14" data-gs-no-move="no" data-gs-no-resize="no">
+                <div class="grid-stack-item-content">
+                    <div id="linkLadder"></div>
+                    <div class="loader"></div>
+                    <p>Calculating LINKUSDT</p>
+                </div>
+            </div>
+            <div class="grid-stack-item" data-gs-x="3" data-gs-y="0" data-gs-width="3" data-gs-height="14" data-gs-no-move="no" data-gs-no-resize="no">
+                <div class="grid-stack-item-content">
+                    <div id="yieldLadder"></div>
+                    <div class="loader"></div>
+                    <p>Calculating YFIUSDT</p>
+                </div>
+            </div>
+            <div class="grid-stack-item" data-gs-x="6" data-gs-y="0" data-gs-width="3" data-gs-height="14" data-gs-no-move="no" data-gs-no-resize="no">
+                <div class="grid-stack-item-content">
+                    <div id="compLadder"></div>
+                    <div class="loader"></div>
+                    <p>Calculating COMPUSDT</p>
+                </div>
+            </div>
+            <div class="grid-stack-item" data-gs-x="9" data-gs-y="0" data-gs-width="3" data-gs-height="14" data-gs-no-move="no" data-gs-no-resize="no">
+                <div class="grid-stack-item-content">
+                    <div id="mkrLadder"></div>
+                    <div class="loader"></div>
+                    <p>Calculating MKRUSDT</p>
+                </div>
+            </div>
+            <div class="grid-stack-item" data-gs-x="0" data-gs-y="17" data-gs-width="3" data-gs-height="6" style="  border-radius: 5px;">
+                <div class="grid-stack-item-content" id="LINKUSDTDIV" style="  border-radius: 5px;">
 
-        <div id="btcspotLadder" style="margin-left: 300px; margin-top: -85px; width: 400px; height:300px;">
+                    <table>
+                        <tr>
+                            <th colspan="2">LINKUSDT</th>
+                        </tr>
+
+                        <td>
+                            <div id="LINKUSDTBID" style="background-color: green; color: white;">
+                        </td>
+                        <td>
+                            <div id="LINKUSDTASK" style="background-color: red; color: white;">
+                        </td>
+                        <tr></tr>
+                        <td>
+                            <div id="LINKUSDTBIDSIZE" style="background-color: #232931; color: white">
+                        </td>
+                        <td>
+                            <div id="LINKUSDTASKSIZE" style="background-color: #232931; color: white">
+                        </td>
+                    </table>
+                    <!-- <center><canvas id="LINKUSDT"></canvas></center> -->
+                    <table id="LINKBOOK"></table>
+                    <div class="loader"></div>
+                    </div>
+                    </div>
+                    <div class="grid-stack-item" data-gs-x="3" data-gs-y="17" data-gs-width="3" data-gs-height="6" style="  border-radius: 5px;">
+                        <div class="grid-stack-item-content" id="YFIUSDTDIV" style="  border-radius: 5px;">
+
+                            <table>
+                                <tr>
+                                    <th colspan="2">YFIUSDT</th>
+                                </tr>
+
+                                <td>
+                                    <div id="YFIUSDTBID" style="background-color: green; color: white;">
+                                </td>
+                                <td>
+                                    <div id="YFIUSDTASK" style="background-color: red; color: white;">
+                                </td>
+                                <tr></tr>
+                                <td>
+                                    <div id="YFIUSDTBIDSIZE" style="background-color: #232931; color: white">
+                                </td>
+                                <td>
+                                    <div id="YFIUSDTASKSIZE" style="background-color: #232931; color: white">
+                                </td>
+                            </table>
+                            <!-- <center><canvas id="YFIUSDT"></canvas></center> -->
+                            <table id="YFIBOOK"></table>
+                            <div class="loader"></div>
+                            </div>
+                            </div>
+                            <div class="grid-stack-item" data-gs-x="6" data-gs-y="17" data-gs-width="3" data-gs-height="6" style="  border-radius: 5px;">
+                                <div class="grid-stack-item-content" id="COMPUSDTDIV" style="  border-radius: 5px;">
+
+                                    <table>
+                                        <tr>
+                                            <th colspan="2">COMPUSDT</th>
+                                        </tr>
+
+                                        <td>
+                                            <div id="COMPUSDTBID" style="background-color: green; color: white;">
+                                        </td>
+                                        <td>
+                                            <div id="COMPUSDTASK" style="background-color: red; color: white;">
+                                        </td>
+                                        <tr></tr>
+                                        <td>
+                                            <div id="COMPUSDTBIDSIZE" style="background-color: #232931; color: white">
+                                        </td>
+                                        <td>
+                                            <div id="COMPUSDTASKSIZE" style="background-color: #232931; color: white">
+                                        </td>
+                                    </table>
+                                    <!-- <center><canvas id="COMPUSDT"></canvas></center> -->
+                                    <table id="COMPBOOK"></table>
+                                    <div class="loader"></div>
+                                    </div>
+                                    </div>
+                                    <div class="grid-stack-item" data-gs-x="9" data-gs-y="17" data-gs-width="3" data-gs-height="6" style="  border-radius: 5px;">
+                                        <div class="grid-stack-item-content" id="MKRUSDTDIV" style="  border-radius: 5px;">
+
+                                            <table>
+                                                <tr>
+                                                    <th colspan="2">MKRUSDT</th>
+                                                </tr>
+
+                                                <td>
+                                                    <div id="MKRUSDTBID" style="background-color: green; color: white;">
+                                                </td>
+                                                <td>
+                                                    <div id="MKRUSDTASK" style="background-color: red; color: white;">
+                                                </td>
+                                                <tr></tr>
+                                                <td>
+                                                    <div id="MKRUSDTBIDSIZE" style="background-color: #232931; color: white">
+                                                </td>
+                                                <td>
+                                                    <div id="MKRUSDTASKSIZE" style="background-color: #232931; color: white">
+                                                </td>
+                                            </table>
+                                            <!-- <center><canvas id="MKRUSDT"></canvas></center> -->
+                                            <table id="MKRBOOK"></table>
+                                            <div class="loader"></div>
+                                            </div>
+                                            </div>
+                                            </div>
 
     </section>
 
@@ -821,7 +957,12 @@
     <script src="js/scripts.js"></script>
     <!-- <script type="text/javascript" src="dist/futures.js"></script> -->
     <script type="text/javascript" src="dist/testbed.js"></script>
-    <script type="text/javascript" src="dist/spot.js"></script>
+    <script type="text/javascript" src="dist/yieldfinance.js"></script>
+    <!-- <script type="text/javascript" src="dist/defiladder.js"></script> -->
+    <script type="text/javascript" src="dist/defialphabook.js"></script>
+    <script type="text/javascript" src="dist/compladder.js"></script>
+    <script type="text/javascript" src="dist/mkrladder.js"></script>
+    <script type="text/javascript" src="dist/linkladder.js"></script>
 </body>
 
 </html>

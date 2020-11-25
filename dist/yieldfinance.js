@@ -39296,17 +39296,8 @@ var limits = {}
 
 var ping
 
-
+GridStack.init();
 const Notiflix = require('notiflix')
-
-notify()
-
-function notify() {
-    // Notiflix.Report.Info('Welcome to WebAlpha', 'WebAlpha is a free limited access version of Alpha. To access a full featured version please visit: cryptoladder.app/index#pricing', 'Proceed');
-    Notiflix.Notify.Success('Pricing Server Connected');
-}
-setInterval(notify, 60000)
-
 
 var Client = require('node-rest-client').Client;
 var client = new Client();
@@ -39319,8 +39310,8 @@ var updates = 0
 var lastUpdateId
 
 var distance = 10000
-var consolidation = 2
-var sizeThreshold = 50
+var consolidation = 50
+var sizeThreshold = 5
 class SocketClient {
     constructor(path, baseUrl) {
         this.baseUrl = baseUrl || 'wss://stream.binance.com/';
@@ -39375,7 +39366,7 @@ class SocketClient {
                 //check for orderbook, if empty retrieve snapshot
                 if (Object.keys(orderbook.bids).length == 0) {
                     // @ts-ignore
-                    client.get('https://fapi.binance.com/fapi/v1/depth?symbol=BTCUSDT&limit=100',
+                    client.get('https://fapi.binance.com/fapi/v1/depth?symbol=YFIUSDT&limit=100',
                         function(data) {
 
                             for (var i in data.bids) {
@@ -39395,7 +39386,7 @@ class SocketClient {
 
                 //get lastUpdateId
                 else {
-                    //console.log(orderbook)
+                    //console.log(orderbook.bids)
                     lastUpdateId = Number(orderbook.lastUpdateId)
                         //console.log(message.U, message.u, lastUpdateId)
                         //console.log(message.u)
@@ -39538,8 +39529,8 @@ async function updateTable(orderbook) {
 
     let html = `<table>`
     html +=
-        `<tr><th colspan="1">DOM</th><th colspan="1">Bids</th><th colspan="1">BTCUSDT</th><th colspan="1">Asks</th><th colspan="1">T: ${numberTrades}</th></tr>`
-    for (var i = centrePrice + 100; i > centrePrice - 100; i -= consolidation) {
+        `<tr><th colspan="1">DOM</th><th colspan="1">Bids</th><th colspan="1">YFIUSDT</th><th colspan="1">Asks</th><th colspan="1">T: ${numberTrades}</th></tr>`
+    for (var i = centrePrice + 2500; i > centrePrice - 2500; i -= consolidation) {
         if (consolidate(lastPrice.price) == i) {
             var directionColour = lastPrice.direction ? "#D23830" : "#0F969E"
             if (i in consolidatedBids) {
@@ -39547,14 +39538,14 @@ async function updateTable(orderbook) {
                 html += `<tr>
                         <td>
                         <div class="meterBids">
-                        <span style="width: ${consolidatedBids[i]}%"></span>
+                        <span style="width: ${consolidatedBids[i]*10}%"></span>
                         </div>
                         </td>`
 
 
                 if (bidMap.get(String(i)).toFixed(3) > sizeThreshold) {
                     html +=
-                        `<td style="background-color:gold;" class=bestBidCol2 onclick="BinanceFBuy(${i})">${bidMap.get(String(i)).toFixed(3)}</td>`
+                        `<td style="background-color:gold; color:black;" class=bestBidCol2 onclick="BinanceFBuy(${i})">${bidMap.get(String(i)).toFixed(3)}</td>`
 
 
                 } else {
@@ -39576,7 +39567,7 @@ async function updateTable(orderbook) {
                 html += `<tr>
             <td>
             <div class="meterAsks">
-              <span style="width: ${consolidatedAsks[i]}%"></span>
+              <span style="width: ${consolidatedAsks[i]*10}%"></span>
             </div>
             </td>`
 
@@ -39608,7 +39599,7 @@ async function updateTable(orderbook) {
                 html += `<tr>
             <td>
             <div class="meterBids">
-              <span style="width: ${consolidatedBids[i]}%;"></span>
+              <span style="width: ${consolidatedBids[i]*10}%;"></span>
             </div>
             </td>`
 
@@ -39653,7 +39644,7 @@ async function updateTable(orderbook) {
                 html += `<tr>
             <td>
             <div class="meterAsks">
-              <span style="width: ${consolidatedAsks[i]}%; border-left: 0px; border-right: 0px;"></span>
+              <span style="width: ${consolidatedAsks[i]*10}%; border-left: 0px; border-right: 0px;"></span>
             </div>
             </td>`
 
@@ -39719,7 +39710,7 @@ async function updateTable(orderbook) {
     }
     html += '</table>'
         //console.log(html)
-    document.getElementById("GUI").innerHTML = html;
+    document.getElementById("yieldLadder").innerHTML = html;
 }
 // document.getElementById("headerAccBids").innerHTML = sum(consolidatedBids).toFixed(0);
 // document.getElementById("headerAccAsks").innerHTML = sum(consolidatedAsks).toFixed(0);
@@ -39787,7 +39778,7 @@ const binance = new Binance().options({
         // APISECRET: localStorage.APISECRETSTORAGE
 });
 
-const socketApi = new SocketClient(`ws/btcusdt@depth@100ms`, 'wss://fstream3.binance.com/');
+const socketApi = new SocketClient(`ws/yfiusdt@depth@100ms`, 'wss://fstream.binance.com/');
 
 BinanceEntryPrice = 10000
 
@@ -39820,7 +39811,7 @@ BinanceEntryPrice = 10000
 //WEBSOCKETS
 
 // Create WebSocket connection.
-const socket = new WebSocket('wss://fstream.binance.com/ws/btcusdt@trade');
+const socket = new WebSocket('wss://fstream.binance.com/ws/yfiusdt@trade');
 // Connection opened
 socket.addEventListener('open', function(event) {
     socket.send('Hello Server!');
@@ -39841,7 +39832,7 @@ socket.addEventListener('message', function(event) {
 
 
 // Create WebSocket connection.
-const socket1 = new WebSocket('wss://fstream.binance.com/ws/btcusdt@miniTicker');
+const socket1 = new WebSocket('wss://fstream.binance.com/ws/yfiusdt@miniTicker');
 // Connection opened
 socket1.addEventListener('open', function(event) {
     socket1.send('Hello Server!');
@@ -39866,7 +39857,7 @@ var percentageChange
 var pointChange
 var numberTrades
     // Create WebSocket connection.
-const socket2 = new WebSocket('wss://fstream.binance.com/ws/btcusdt@ticker');
+const socket2 = new WebSocket('wss://fstream.binance.com/ws/yfiusdt@ticker');
 // Connection opened
 socket2.addEventListener('open', function(event) {
     socket2.send('Hello Server!');
@@ -39888,7 +39879,7 @@ var rawprice
 
 
 // Create WebSocket connection.
-const socket3 = new WebSocket('wss://fstream.binance.com/ws/btcusdt@aggTrade');
+const socket3 = new WebSocket('wss://fstream.binance.com/ws/yfiusdt@aggTrade');
 // Connection opened
 socket3.addEventListener('open', function(event) {
     socket3.send('Hello Server!');
