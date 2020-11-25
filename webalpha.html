@@ -579,6 +579,24 @@
         </div>
         <ul class="nav-list nav-bottom">
             <li class="nav-item">
+                <i class="ri-zoom-in-line"></i>
+                <span class="text" onclick="zoom75()"><a >Zoom 75%</a></span>
+            </li>
+            <li class="nav-item">
+                <i class="ri-zoom-in-line"></i>
+                <span class="text" onclick="zoom100()"><a >Zoom 100%</a></span>
+            </li>
+            <script type="text/javascript">
+                function zoom75() {
+                    document.body.style.zoom = "75%"
+                }
+            </script>
+            <script type="text/javascript">
+                function zoom100() {
+                    document.body.style.zoom = "100%"
+                }
+            </script>
+            <li class="nav-item">
                 <i class="icon ri-restart-line"></i>
                 <span class="text" id="reload">Reload</span>
                 <script>
