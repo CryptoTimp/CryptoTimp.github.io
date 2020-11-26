@@ -57,7 +57,7 @@ wsYFIUSDTBOOK.addEventListener('message', function incoming(event) {
     YFIASKS = ((response.data.b))
 
     var yfibooktable = '<table>'
-    var threshold = 0.5
+    var threshold = 0.1
 
     for (var i in YFIBIDS) {
         if (Number(YFIBIDS[i][1]).toFixed(2) > threshold) {
