@@ -39305,7 +39305,7 @@ function notify() {
     // Notiflix.Report.Info('Welcome to WebAlpha', 'WebAlpha is a free limited access version of Alpha. To access a full featured version please visit: cryptoladder.app/index#pricing', 'Proceed');
     Notiflix.Notify.Success('Pricing Server Connected');
 }
-setInterval(notify, 60000)
+setInterval(notify, 360000)
 
 
 var Client = require('node-rest-client').Client;
@@ -39602,7 +39602,7 @@ async function updateTable(orderbook) {
             </tr>`
             }
         } else {
-            if (i in consolidatedBids && volumeProfileObject && bidMap.has(String(i))) {
+            if (i in consolidatedBids && volumeProfileObject && bidMap.has(String(i)) && i < lastPrice.price) {
                 // BIDS
                 //console.log(i)
                 html += `<tr>
@@ -39647,7 +39647,7 @@ async function updateTable(orderbook) {
                   </td>
                   </tr>`
 
-            } else if (i in consolidatedAsks && volumeProfileObject && askMap.has(String(i))) {
+            } else if (i in consolidatedAsks && volumeProfileObject && askMap.has(String(i)) && i > lastPrice.price) {
                 // ASKS
 
                 html += `<tr>

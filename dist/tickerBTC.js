@@ -124,7 +124,11 @@ function RenderBinanceTOS() {
         } else if (normalSize > settings.BinanceTOS.highlightThreshold1) {
             colour = settings.BinanceTOS.highlightThreshold1Colour
         } else {
-            colour = "black"
+            if (BinanceTOSData[i].m) {
+                colour = "rgba(255, 0, 0, 0.1)"
+            } else {
+                colour = "rgba(0, 255, 0, 0.1)"
+            }
         }
         //console.log(BinanceTOSData[i].q, colour)
         // Find direction colour:

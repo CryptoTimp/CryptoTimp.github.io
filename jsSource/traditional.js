@@ -1,16 +1,14 @@
+let msgFTX = {
+    "op": "subscribe",
+    "channel": "orderbook",
+    "market": "BTC-USD"
+}
+
 var _ = require('lodash')
 var $ = require('jquery')
 
 const path = require('path')
 
-var grid = GridStack.init();
-var limits = {}
-
-var ping
-
-
-const Notiflix = require('notiflix')
-    //Require Package
 var Client = require('node-rest-client').Client;
 var client = new Client();
 
@@ -21,12 +19,14 @@ var orderbook = {
 var updates = 0
 var lastUpdateId
 
+const socketApi = new SocketClient(`ws/BTC-USD@depth@100ms`, 'wss://ftx.com/');
+
 var distance = 10000
-var consolidation = 1
-var sizeThreshold = 5000
+var consolidation = 2
+var sizeThreshold = 50
 class SocketClient {
     constructor(path, baseUrl) {
-        this.baseUrl = baseUrl || 'wss://stream.binance.com/';
+        this.baseUrl = baseUrl || 'wss://ftx.com/ws/';
         this._path = path;
         this._createSocket();
         this._handlers = new Map();
@@ -35,41 +35,12 @@ class SocketClient {
     _createSocket() {
         console.log(`${this.baseUrl}${this._path}`);
 
-        // // Create WebSocket connection.
-        // const socket = new WebSocket('ws://localhost:8080');
-
-        // // Connection opened
-        // socket.addEventListener('open', function(event) {
-        //     socket.send('Hello Server!');
-        // });
-
-        // // Listen for messages
-        // socket.addEventListener('message', function(event) {
-        //     console.log('Message from server ', event.data);
-        // });
-
-
         this._ws = new WebSocket(`${this.baseUrl}${this._path}`);
 
         this._ws.onopen = () => {
             console.log('Binance ws connected');
+            this._ws.send(JSON.stringify(msgFTX));
         };
-
-        // this.addEventListener.on('pong', () => {
-        //     // console.log('receieved pong from server');
-        // });
-        // this._ws.on('ping', () => {
-        //     //console.log('==========receieved ping from server');
-        //     this._ws.pong();
-        // });
-
-        // this._ws.onclose = () => {
-        //     console.log('ws closed');
-        // };
-
-        // this._ws.onerror = (err) => {
-        //     console.log('ws error', err);
-        // };
 
         this._ws.onmessage = (msg) => {
             try {
@@ -77,8 +48,8 @@ class SocketClient {
                 //console.log(message)
                 //check for orderbook, if empty retrieve snapshot
                 if (Object.keys(orderbook.bids).length == 0) {
-                    // @ts-ignore
-                    client.get('https://fapi.binance.com/fapi/v1/depth?symbol=ETHUSDT&limit=100',
+                    // @ts-ignore 
+                    client.get('https://ftx.com/api/markets/BTC-USD/orderbook?depth=100',
                         function(data) {
 
                             for (var i in data.bids) {
@@ -172,7 +143,7 @@ async function manageOrderbook(side, update) {
 
 //Mapping
 var centrePrice = 0
-var renderDistance = 15
+var renderDistance = 25
 
 function truncateObject(obj, num) {
     var newObj = {}
@@ -239,64 +210,63 @@ async function updateTable(orderbook) {
     var askMap = truncateAskMap(askbid, renderDistance)
 
 
-    try {
-        let html = `<table>`
-        html +=
-            `<tr><th colspan="1">DOM</th><th colspan="1">ETHUSDT</th><th colspan="1">Price</th><th colspan="1">Asks</th><th colspan="1">T: ${numberTrades}</th></tr>`
-        for (var i = centrePrice + 50; i > centrePrice - 50; i -= consolidation) {
-            if (consolidate(lastPrice.price) == i) {
-                var directionColour = lastPrice.direction ? "#D23830" : "#0F969E"
-                if (i in consolidatedBids) {
-                    // BEST BID
-                    html += `<tr>
+    let html = `<table>`
+    html +=
+        `<tr><th colspan="1">DOM</th><th colspan="1">Bids</th><th colspan="1">BTCUSDT</th><th colspan="1">Asks</th><th colspan="1">T: ${numberTrades}</th></tr>`
+    for (var i = centrePrice + 100; i > centrePrice - 100; i -= consolidation) {
+        if (consolidate(lastPrice.price) == i) {
+            var directionColour = lastPrice.direction ? "#D23830" : "#0F969E"
+            if (i in consolidatedBids) {
+                // BEST BID
+                html += `<tr>
                         <td>
                         <div class="meterBids">
-                        <span style="width: ${consolidatedBids[i]/100}%"></span>
+                        <span style="width: ${consolidatedBids[i]}%"></span>
                         </div>
                         </td>`
 
 
-                    if (bidMap.get(String(i)).toFixed(0) > sizeThreshold) {
-                        html +=
-                            `<td style="background-color:gold;"  class=bestBidCol2 onclick="BinanceFBuy(${i})">${bidMap.get(String(i)).toFixed(3)}</td>`
-
-
-                    } else {
-                        html +=
-                            `<td class=bestBidCol2 onclick="BinanceFBuy(${i})">${bidMap.get(String(i)).toFixed(3)}</td>`
-                    }
-
-                    if (BinanceEntryPrice === i) {
-                        html += `<td style="background-color: blue; color: white;">${i + " " + PNLP1}</td>`
-                    } else {
-                        html += `<td class=bestBidCol3>${i}</td>`
-                    }
-
-                    html += `<td class=bestBidCol4 onclick="BinanceFSell(${i})"></td>`
+                if (bidMap.get(String(i)).toFixed(3) > sizeThreshold) {
                     html +=
-                        `<td id="centerPrice" style="background-color:${directionColour}; color:white;">${lastPrice.qty}</td>`
+                        `<td style="background-color:gold;" class=bestBidCol2 onclick="BinanceFBuy(${i})">${bidMap.get(String(i)).toFixed(3)}</td>`
 
-                } else if (i in consolidatedAsks) {
-                    html += `<tr>
+
+                } else {
+                    html +=
+                        `<td class=bestBidCol2 onclick="BinanceFBuy(${i})">${bidMap.get(String(i)).toFixed(3)}</td>`
+                }
+
+                if (BinanceEntryPrice === i) {
+                    html += `<td style="background-color: blue; color: white;">${i + " " + PNLP1}</td>`
+                } else {
+                    html += `<td class=bestBidCol3>${i}</td>`
+                }
+
+                html += `<td class=bestBidCol4 onclick="BinanceFSell(${i})"></td>`
+                html +=
+                    `<td id="centerPrice" style="background-color:${directionColour}; color:white;">${lastPrice.qty}</td>`
+
+            } else if (i in consolidatedAsks) {
+                html += `<tr>
             <td>
             <div class="meterAsks">
               <span style="width: ${consolidatedAsks[i]}%"></span>
             </div>
             </td>`
 
-                    html += `<td class=bestAskCol2 onclick="BinanceFBuy(${i})"></td>`
-                    if (BinanceEntryPrice === i) {
-                        html += `<td style="background-color: blue; color: white;">${i + " " + PNLP1}</td>`
-                    } else {
-                        html += `<td class=bestAskCol3>${i}</td>`
-                    }
-                    html +=
-                        `<td class=askCol4 onclick="BinanceFSell(${i})">${askMap.get(String(i)).toFixed(3)}</td>`
-                    html +=
-                        `<td id="centerPrice" style="background-color:${directionColour}; color:white;">${lastPrice.qty}</td>`
+                html += `<td class=bestAskCol2 onclick="BinanceFBuy(${i})"></td>`
+                if (BinanceEntryPrice === i) {
+                    html += `<td style="background-color: blue; color: white;">${i + " " + PNLP1}</td>`
                 } else {
-                    // No bids/asks
-                    html += `<tr>
+                    html += `<td class=bestAskCol3>${i}</td>`
+                }
+                html +=
+                    `<td class=askCol4 onclick="BinanceFSell(${i})">${askMap.get(String(i)).toFixed(3)}</td>`
+                html +=
+                    `<td id="centerPrice" style="background-color:${directionColour}; color:white;">${lastPrice.qty}</td>`
+            } else {
+                // No bids/asks
+                html += `<tr>
             <td></td>
             <td></td>
             <td class=bestNBACol2></td>
@@ -304,134 +274,135 @@ async function updateTable(orderbook) {
             <td class=bestNBACol4></td>
             <td></td>
             </tr>`
-                }
-            } else {
-                if (i in consolidatedBids && volumeProfileObject && bidMap.has(String(i)) && i < lastPrice.price) {
-                    // BIDS
-                    //console.log(i)
-                    html += `<tr>
+            }
+        } else {
+            if (i in consolidatedBids && volumeProfileObject && bidMap.has(String(i)) && i < lastPrice.price) {
+                // BIDS
+                //console.log(i)
+                html += `<tr>
             <td>
             <div class="meterBids">
-              <span style="width: ${consolidatedBids[i]/100}%;"></span>
+              <span style="width: ${consolidatedBids[i]}%;"></span>
             </div>
             </td>`
 
 
-                    if (bidMap.get(String(i)).toFixed(0) > sizeThreshold) {
-                        html +=
-                            `<td style="background-color:gold;" onclick="BinanceFBuy(${i})">${bidMap.get(String(i)).toFixed(3)}</td>`
+                if (bidMap.get(String(i)).toFixed(3) > sizeThreshold) {
+                    html +=
+                        `<td style="background-color:gold;" onclick="BinanceFBuy(${i})">${bidMap.get(String(i)).toFixed(3)}</td>`
 
-
-                    } else {
-                        html +=
-                            `<td class=bidCol2 onclick="BinanceFBuy(${i})">${bidMap.get(String(i)).toFixed(3)}</td>`
-                    }
-
-
-                    if (parseInt((candleData.low / consolidation) * consolidation) === i) {
-                        html +=
-                            `<td style="background-color: purple; color: white; outline: 2px dashed blue;">${i}(L)</td>`
-                    } else if (BinanceEntryPrice === i && Amount > 0) {
-                        html += `<td style="background-color: blue; color: white;">${i + " " + PNLP1}</td>`
-                    } else if (BinanceEntryPrice === i && Amount < 0) {
-                        html += `<td style="background-color: red; color: white;">${i + " " + PNLP1}</td>`
-                    } else {
-                        html += `<td class=bidCol3>${i}</td>`
-                    }
-
-                    html += `<td class=bidCol4 onclick="BinanceFSell(${i})"></td>
-            <td>                
-            <div class="meterAccBids">`
-                    if (volumeProfileObject[i] > 0) {
-                        html += `<span class=bestBidCol5 style="width: ${volumeProfileObject[i]}%;"></span>`
-                    } else {
-                        `<span style="width: 0%"></span>`
-                    }
-                    html += `</div>
-                  </td>
-                  </tr>`
-
-                } else if (i in consolidatedAsks && volumeProfileObject && askMap.has(String(i)) && i > lastPrice.price) {
-                    // ASKS
-
-                    html += `<tr>
-            <td>
-            <div class="meterAsks">
-              <span style="width: ${consolidatedAsks[i]/100}%; border-left: 0px; border-right: 0px;"></span>
-            </div>
-            </td>`
-
-
-
-                    html += `<td class=askCol2 onclick="BinanceFBuy(${i})"></td>`
-
-                    if (parseInt((candleData.high / consolidation) * consolidation) === i) {
-                        html +=
-                            `<td style="background-color: purple; color: white; outline: 2px dashed blue;">${i}(H)</td>`
-                    } else if (BinanceEntryPrice === i && Amount > 0) {
-                        html += `<td style="background-color: blue; color: white;">${i + " " + PNLP1}</td>`
-                    } else if (BinanceEntryPrice === i && Amount < 0) {
-                        html += `<td style="background-color: red; color: white;">${i + " " + PNLP1}</td>`
-                    } else {
-                        html += `<td class=bidCol3>${i}</td>`
-                    }
-
-                    if (askMap.get(String(i)).toFixed(0) > sizeThreshold) {
-                        html +=
-                            `<td style="background-color:gold;" onclick="BinanceFSell(${i})">${askMap.get(String(i)).toFixed(3)}</td>`
-                    } else {
-                        html +=
-                            `<td class=askCol4 onclick="BinanceFSell(${i})">${askMap.get(String(i)).toFixed(3)}</td>`
-                    }
-                    html += `<td><div class="meterAccBids">`
-                    if (volumeProfileObject[i] > 0) {
-                        html += `<span class=askCol5 style="width: ${volumeProfileObject[i]}%;"></span>`
-                    } else {
-                        `<span style="width: 0%"></span>`
-                    }
-                    html += `</div>
-                  </td>
-                  </tr>`
 
                 } else {
-                    // No bids/asks
-                    html += `<tr>
+                    html +=
+                        `<td class=bidCol2 onclick="BinanceFBuy(${i})">${bidMap.get(String(i)).toFixed(3)}</td>`
+                }
+
+
+                if (parseInt((candleData.low / consolidation) * consolidation) === i) {
+                    html +=
+                        `<td style="background-color: purple; color: white; outline: 2px dashed blue;">${i}(L)</td>`
+                } else if (BinanceEntryPrice === i && Amount > 0) {
+                    html += `<td style="background-color: blue; color: white;">${i + " " + PNLP1}</td>`
+                } else if (BinanceEntryPrice === i && Amount < 0) {
+                    html += `<td style="background-color: red; color: white;">${i + " " + PNLP1}</td>`
+                } else {
+                    html += `<td class=bidCol3>${i}</td>`
+                }
+
+                html += `<td class=bidCol4 onclick="BinanceFSell(${i})"></td>
+            <td>                
+            <div class="meterAccBids">`
+                if (volumeProfileObject[i] > 0) {
+                    html += `<span class=bestBidCol5 style="width: ${volumeProfileObject[i]}%;"></span>`
+                } else {
+                    `<span style="width: 0%"></span>`
+                }
+                html += `</div>
+                  </td>
+                  </tr>`
+
+            } else if (i in consolidatedAsks && volumeProfileObject && askMap.has(String(i)) && i > lastPrice.price) {
+                // ASKS
+
+                html += `<tr>
+            <td>
+            <div class="meterAsks">
+              <span style="width: ${consolidatedAsks[i]}%; border-left: 0px; border-right: 0px;"></span>
+            </div>
+            </td>`
+
+
+
+                html += `<td class=askCol2 onclick="BinanceFBuy(${i})"></td>`
+
+                if (parseInt((candleData.high / consolidation) * consolidation) === i) {
+                    html +=
+                        `<td style="background-color: purple; color: white; outline: 2px dashed blue;">${i}(H)</td>`
+                } else if (BinanceEntryPrice === i && Amount > 0) {
+                    html += `<td style="background-color: blue; color: white;">${i + " " + PNLP1}</td>`
+                } else if (BinanceEntryPrice === i && Amount < 0) {
+                    html += `<td style="background-color: red; color: white;">${i + " " + PNLP1}</td>`
+                } else {
+                    html += `<td class=bidCol3>${i}</td>`
+                }
+
+                if (askMap.get(String(i)).toFixed(3) > sizeThreshold) {
+                    html +=
+                        `<td style="background-color:gold;" onclick="BinanceFSell(${i})">${askMap.get(String(i)).toFixed(3)}</td>`
+                } else {
+                    html +=
+                        `<td class=askCol4 onclick="BinanceFSell(${i})">${askMap.get(String(i)).toFixed(3)}</td>`
+                }
+                html += `<td><div class="meterAccBids">`
+                if (volumeProfileObject[i] > 0) {
+                    html += `<span class=askCol5 style="width: ${volumeProfileObject[i]}%;"></span>`
+                } else {
+                    `<span style="width: 0%"></span>`
+                }
+                html += `</div>
+                  </td>
+                  </tr>`
+
+            } else {
+                // No bids/asks
+                html += `<tr>
             <td></td>`
 
 
 
-                    html += `<td class=askCol2 onclick="BinanceFBuy(${i})"></td>`
-                    if (parseInt(candleData.high / consolidation) * consolidation === i) {
-                        html +=
-                            `<td style="background-color: purple; color: white; outline: 2px dashed blue;">${i}(H)</td>`
-                    } else if (parseInt(candleData.low / consolidation) * consolidation === i) {
-                        html +=
-                            `<td style="background-color: purple; color: white; outline: 2px dashed blue;">${i}(L)</td>`
-                    } else if (BinanceEntryPrice === i && Amount > 0) {
-                        html += `<td style="background-color: blue; color: white;">${i + " " + PNLP1}</td>`
-                    } else if (BinanceEntryPrice === i && Amount < 0) {
-                        html += `<td style="background-color: red; color: white;">${i + " " + PNLP1}</td>`
-                    } else {
-                        html += `<td class=bidCol3>${i}</td>`
-                    }
+                html += `<td class=askCol2 onclick="BinanceFBuy(${i})"></td>`
+                if (parseInt(candleData.high / consolidation) * consolidation === i) {
+                    html +=
+                        `<td style="background-color: purple; color: white; outline: 2px dashed blue;">${i}(H)</td>`
+                } else if (parseInt(candleData.low / consolidation) * consolidation === i) {
+                    html +=
+                        `<td style="background-color: purple; color: white; outline: 2px dashed blue;">${i}(L)</td>`
+                } else if (BinanceEntryPrice === i && Amount > 0) {
+                    html += `<td style="background-color: blue; color: white;">${i + " " + PNLP1}</td>`
+                } else if (BinanceEntryPrice === i && Amount < 0) {
+                    html += `<td style="background-color: red; color: white;">${i + " " + PNLP1}</td>`
+                } else {
+                    html += `<td class=bidCol3>${i}</td>`
+                }
 
-                    html += `<td class=NBACol4 onclick="BinanceFSell(${i})"></td>
+                html += `<td class=NBACol4 onclick="BinanceFSell(${i})"></td>
             <td></td>
             </tr>`
-                }
             }
         }
-        html += '</table>'
-            //console.log(html)
-        document.getElementById("ETH").innerHTML = html;
-    } catch (error) {}
-    // document.getElementById("headerAccBids").innerHTML = sum(consolidatedBids).toFixed(0);
-    // document.getElementById("headerAccAsks").innerHTML = sum(consolidatedAsks).toFixed(0);
-
-    // ping = Number(Date.now())-Number(candleData.time)
-    // //console.log(ping)
-    // document.getElementById("ping").innerHTML = ping+"ms";
+    }
+    html += '</table>'
+        //console.log(html)
+    document.getElementById("GUI").innerHTML = html;
 }
+// document.getElementById("headerAccBids").innerHTML = sum(consolidatedBids).toFixed(0);
+// document.getElementById("headerAccAsks").innerHTML = sum(consolidatedAsks).toFixed(0);
+
+// ping = Number(Date.now())-Number(candleData.time)
+// //console.log(ping)
+// document.getElementById("ping").innerHTML = ping+"ms";
+
+
 
 // function sum(obj) {
 //     var sum = 0;
@@ -490,7 +461,7 @@ const binance = new Binance().options({
         // APISECRET: localStorage.APISECRETSTORAGE
 });
 
-const socketApi = new SocketClient(`ws/ethusdt@depth@100ms`, 'wss://fstream3.binance.com/');
+
 
 BinanceEntryPrice = 10000
 
@@ -499,13 +470,13 @@ BinanceEntryPrice = 10000
 //     async function asyncCall() {
 //         var response = (await binance.futuresPositionRisk());
 //         const result = await resolveAfter2Seconds();
-//         console.log(response.ethUSDT)
-//         Amount = response.ethUSDT.positionAmt
-//         Entry = (response.ethUSDT.entryPrice)
+//         console.log(response.BTCUSDT)
+//         Amount = response.BTCUSDT.positionAmt
+//         Entry = (response.BTCUSDT.entryPrice)
 //         BinanceEntryPrice = parseInt(Entry / consolidation) * consolidation
-//         MarkPrice = Number(response.ethUSDT.markPrice)
+//         MarkPrice = Number(response.BTCUSDT.markPrice)
 //         PNLP1 = Number(MarkPrice - BinanceEntryPrice).toFixed(1)
-//         urpl = Number(response.ethUSDT.unRealizedProfit)
+//         urpl = Number(response.BTCUSDT.unRealizedProfit)
 //     }
 //     asyncCall(); //
 //     async function resolveAfter2Seconds() {
@@ -523,7 +494,7 @@ BinanceEntryPrice = 10000
 //WEBSOCKETS
 
 // Create WebSocket connection.
-const socket = new WebSocket('wss://fstream.binance.com/ws/ethusdt@trade');
+const socket = new WebSocket('wss://fstream.binance.com/ws/btcusdt@trade');
 // Connection opened
 socket.addEventListener('open', function(event) {
     socket.send('Hello Server!');
@@ -544,7 +515,7 @@ socket.addEventListener('message', function(event) {
 
 
 // Create WebSocket connection.
-const socket1 = new WebSocket('wss://fstream.binance.com/ws/ethusdt@miniTicker');
+const socket1 = new WebSocket('wss://fstream.binance.com/ws/btcusdt@miniTicker');
 // Connection opened
 socket1.addEventListener('open', function(event) {
     socket1.send('Hello Server!');
@@ -569,7 +540,7 @@ var percentageChange
 var pointChange
 var numberTrades
     // Create WebSocket connection.
-const socket2 = new WebSocket('wss://fstream.binance.com/ws/ethusdt@ticker');
+const socket2 = new WebSocket('wss://fstream.binance.com/ws/btcusdt@ticker');
 // Connection opened
 socket2.addEventListener('open', function(event) {
     socket2.send('Hello Server!');
@@ -585,13 +556,13 @@ socket2.addEventListener('message', function(event) {
 
 
 
-var volumeProfileObject = {} //   prices : qty (denoted in eth)
+var volumeProfileObject = {} //   prices : qty (denoted in BTC)
 var price
 var rawprice
 
 
 // Create WebSocket connection.
-const socket3 = new WebSocket('wss://fstream.binance.com/ws/ethusdt@aggTrade');
+const socket3 = new WebSocket('wss://fstream.binance.com/ws/btcusdt@aggTrade');
 // Connection opened
 socket3.addEventListener('open', function(event) {
     socket3.send('Hello Server!');

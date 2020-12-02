@@ -4,14 +4,12 @@ var msg = {
     "method": "public/subscribe",
     "id": 42,
     "params": {
-        "channels": ["markprice.options.btc_usd"]
+        "channels": ["markprice.options.eth_usd"]
     }
 };
 
-const Notiflix = require('notiflix')
-
 // Create WebSocket connection.
-const socket = new WebSocket('wss://fstream.binance.com/ws/btcusdt@trade');
+const socket = new WebSocket('wss://fstream.binance.com/ws/ethusdt@trade');
 // Connection opened
 socket.addEventListener('open', function(event) {
     socket.send('Hello Server!');
@@ -77,12 +75,13 @@ ws.onmessage = function(e) {
 
 
     let html = `<table>`
-    html += `<tr><th colspan="1">Bids</th><th colspan="1">BTC</th><th colspan="1">Asks</th></tr>`
+    html += `<tr><th colspan="1">Bids</th><th colspan="1">ETH</th><th colspan="1">Asks</th></tr>`
     for (var i = centrePrice + 500; i > centrePrice - 500; i -= consolidation) {
 
         if (consolidate(lastPrice.price) == i) {
 
             if (i in optionsObjectBids) {
+
 
 
                 //QTY
@@ -129,6 +128,7 @@ ws.onmessage = function(e) {
 
                 html += `<tr><td class=bidCol2>${optionsObjectBids[i]}</td>`
 
+
                 //CENTER PRICES
                 html += `<td class=bidCol3>${i}</td>`
 
@@ -145,49 +145,40 @@ ws.onmessage = function(e) {
                 html += `<td class=askCol3>${i}</td>`
 
                 //QTY
+
                 html += `<td class=askCol4>${optionsObjectAsks[i]}</td>`
 
             } else {
                 // No bids/asks
                 html += `<tr>`
-                html += `<td class=NBACol2></td>`
+                html += `<td class=NBACol2 onclick="BinanceFBuy(${i})"></td>`
                 html += `<td class=NBACol3>${i}</td>`
-                html += `<td class=NBACol4></td>
+                html += `<td class=NBACol4 onclick="BinanceFSell(${i})"></td>
 
             </tr>`
-                console.log("end")
+                    //console.log("end")
             }
         }
     }
     html += '</table>'
         //console.log(html)
-    document.getElementById("GUI").innerHTML = html;
+    document.getElementById("GUIETH").innerHTML = html;
 
 
 }
+
 
 ws.onopen = function() {
     ws.send(JSON.stringify(msg));
 };
 
 
-okexmsg = {
-    "op": "subscribe",
-    "args": ["option/instruments:BTC-USD"]
-}
 
-var wso = new WebSocket('wss://real.okex.com:8443/ws/v3');
 
-wso.onmessage = function(e) {
 
-    response = (e.data.size)
-    console.log(response)
 
-}
 
-wso.onopen = function() {
-    wso.send(JSON.stringify(okexmsg));
-};
+
 
 
 
@@ -266,13 +257,13 @@ BinanceEntryPrice = 10000
 //     async function asyncCall() {
 //         var response = (await binance.futuresPositionRisk());
 //         const result = await resolveAfter2Seconds();
-//         console.log(response.BTCUSDT)
-//         Amount = response.BTCUSDT.positionAmt
-//         Entry = (response.BTCUSDT.entryPrice)
+//         console.log(response.ETHUSDT)
+//         Amount = response.ETHUSDT.positionAmt
+//         Entry = (response.ETHUSDT.entryPrice)
 //         BinanceEntryPrice = parseInt(Entry / consolidation) * consolidation
-//         MarkPrice = Number(response.BTCUSDT.markPrice)
+//         MarkPrice = Number(response.ETHUSDT.markPrice)
 //         PNLP1 = Number(MarkPrice - BinanceEntryPrice).toFixed(1)
-//         urpl = Number(response.BTCUSDT.unRealizedProfit)
+//         urpl = Number(response.ETHUSDT.unRealizedProfit)
 //     }
 //     asyncCall(); //
 //     async function resolveAfter2Seconds() {
@@ -293,7 +284,7 @@ BinanceEntryPrice = 10000
 
 
 // Create WebSocket connection.
-const socket1 = new WebSocket('wss://fstream.binance.com/ws/btcusdt@miniTicker');
+const socket1 = new WebSocket('wss://fstream.binance.com/ws/ethusdt@miniTicker');
 // Connection opened
 socket1.addEventListener('open', function(event) {
     socket1.send('Hello Server!');
@@ -318,7 +309,7 @@ var percentageChange
 var pointChange
 var numberTrades
     // Create WebSocket connection.
-const socket2 = new WebSocket('wss://fstream.binance.com/ws/btcusdt@ticker');
+const socket2 = new WebSocket('wss://fstream.binance.com/ws/ethusdt@ticker');
 // Connection opened
 socket2.addEventListener('open', function(event) {
     socket2.send('Hello Server!');
@@ -334,13 +325,13 @@ socket2.addEventListener('message', function(event) {
 
 
 
-var volumeProfileObject = {} //   prices : qty (denoted in BTC)
+var volumeProfileObject = {} //   prices : qty (denoted in ETH)
 var price
 var rawprice
 
 
 // Create WebSocket connection.
-const socket3 = new WebSocket('wss://fstream.binance.com/ws/btcusdt@aggTrade');
+const socket3 = new WebSocket('wss://fstream.binance.com/ws/ethusdt@aggTrade');
 // Connection opened
 socket3.addEventListener('open', function(event) {
     socket3.send('Hello Server!');

@@ -314,7 +314,7 @@ async function updateTable(orderbook) {
             </tr>`
             }
         } else {
-            if (i in consolidatedBids && volumeProfileObject && bidMap.has(String(i))) {
+            if (i in consolidatedBids && volumeProfileObject && bidMap.has(String(i)) && i < lastPrice.price) {
                 // BIDS
                 //console.log(i)
                 html += `<tr>
@@ -359,7 +359,7 @@ async function updateTable(orderbook) {
                   </td>
                   </tr>`
 
-            } else if (i in consolidatedAsks && volumeProfileObject && askMap.has(String(i))) {
+            } else if (i in consolidatedAsks && volumeProfileObject && askMap.has(String(i)) && i > lastPrice.price) {
                 // ASKS
 
                 html += `<tr>

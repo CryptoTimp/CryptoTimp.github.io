@@ -479,23 +479,23 @@
 
 <script type="text/javascript">
     function zoom() {
-        document.body.style.zoom = "75%"
+        document.body.style.zoom = "10%"
     }
 </script>
 
 
-<body onload="zoom()">
+<body>
     <!--navigation-->
     <section class="smart-scroll">
         <div class="container-fluid">
             <nav class="navbar navbar-expand-md navbar-dark">
                 <a class="navbar-brand heading-black" href="webalpha.html" style="margin-left: 7px;">
-                    WebAlpha<img src="minilogo.png" style="margin-left: 5px; margin-bottom: 5px;">
-                </a>
+                WebAlpha<img src="minilogo.png" style="margin-left: 5px; margin-bottom: 5px;">
+            </a>
 
                 <button class="navbar-toggler navbar-toggler-right border-0" type="button" data-toggle="collapse" data-target="#navbarCollapse" aria-controls="navbarCollapse" aria-expanded="false" aria-label="Toggle navigation">
-                    <span data-feather="grid"></span>
-                </button>
+                <span data-feather="grid"></span>
+            </button>
                 <div class="collapse navbar-collapse" id="navbarCollapse">
                     <ul class="navbar-nav ml-auto">
                         <li class="nav-item">
@@ -530,7 +530,7 @@
     </section>
     <aside class="sidebar">
         <ul class="nav-list">
-            <li class="nav-item active">
+            <li class="nav-item">
                 <i class="icon ri-stock-line "></i>
                 <span class="text"><a href="webalpha.html">Futures<sup> Beta</sup></a></span>
             </li>
@@ -562,7 +562,7 @@
                 <i class="icon ri-message-3-line"></i>
                 <span class="text">Messages</span>
             </li> -->
-            <li class="nav-item">
+            <li class="nav-item active">
                 <i class="icon ri-safe-line"></i>
                 <span class="text"><a href="">Options<sup> Soon</sup></a></span>
             </li>
@@ -571,11 +571,6 @@
             <li class="nav-item">
                 <i class="ri-download-2-line"></i>
                 <span class="text"><a href="index.html#pricing">Download</a></span>
-            </li>
-
-            <li class="nav-item">
-                <i class="ri-hand-coin-line"></i>
-                <span class="text"><a>Donate</a></span>
             </li>
         </ul>
         <div class="btn-toggle">
@@ -833,147 +828,13 @@
     <section class="py-7">
 
         <div class="grid-stack">
-            <div class="grid-stack-item" data-gs-x="0" data-gs-y="0" data-gs-width="2" data-gs-height="14" data-gs-no-move="no" data-gs-no-resize="no">
+            <div class="grid-stack-item" data-gs-x="0" data-gs-y="0" data-gs-width="8" data-gs-height="14" data-gs-no-move="no" data-gs-no-resize="no">
                 <div class="grid-stack-item-content">
-
-                    <div id="GUI">
-
-                    </div>
-                    <div class="loader"></div>
-                    <p>Calculating Prices</p>
+                    <div id="GUI"></div>
                 </div>
             </div>
-            <div class="grid-stack-item" data-gs-x="2" data-gs-y="0" data-gs-width="2" data-gs-height="14" data-gs-no-move="no" data-gs-no-resize="no">
-                <div class="grid-stack-item-content">
+        </div>
 
-                    <div id="ETH">
-
-                    </div>
-                    <div class="loader"></div>
-                    <p>Calculating Prices</p>
-                </div>
-            </div>
-            <!-- <div class="grid-stack-item" data-gs-x="7" data-gs-y="11" data-gs-width="4" data-gs-height="5" data-gs-no-move="no" data-gs-no-resize="no">
-                <div class="grid-stack-item-content">
-
-                    <div id="container">
-
-                    </div>
-                </div>
-            </div> -->
-            <div class="grid-stack-item" data-gs-x="11" data-gs-y="1" data-gs-width="6" data-gs-height="11" data-gs-no-move="yes" data-gs-no-resize="no">
-                <div class="grid-stack-item-content">
-
-                    <div id="chart">
-
-                    </div>
-
-                </div>
-            </div>
-            <div class="grid-stack-item" data-gs-x="11" data-gs-y="13" data-gs-width="6" data-gs-height="11" data-gs-no-move="yes" data-gs-no-resize="yes">
-                <div class="grid-stack-item-content">
-
-                    <div id="charteth">
-
-                    </div>
-
-                </div>
-            </div>
-            <!-- <div class="grid-stack-item" data-gs-x="10" data-gs-y="11" data-gs-width="1" data-gs-height="3" data-gs-no-move="no" data-gs-no-resize="no">
-                <div class="grid-stack-item-content">
-
-                    <center><canvas id="BTCUSDTRATIO"></canvas></center>
-                </div>
-            </div>
-            <div class="grid-stack-item" data-gs-x="11" data-gs-y="11" data-gs-width="1" data-gs-height="3" data-gs-no-move="no" data-gs-no-resize="no">
-                <div class="grid-stack-item-content">
-
-                    <center><canvas id="BTCUSDTTAKERVOLUME"></canvas></center>
-                </div>
-            </div> -->
-            <!-- <div class="grid-stack-item" data-gs-x="11" data-gs-y="11" data-gs-width="2" data-gs-height="5" data-gs-no-move="no" data-gs-no-resize="no">
-                <div class="grid-stack-item-content">
-
-                    <center>
-                        <div id="myDiv" style="color: white;"></div>
-                    </center>
-                </div>
-            </div> -->
-            <div class="grid-stack-item" data-gs-x="4" data-gs-y="0" data-gs-width="2" data-gs-height="11" data-gs-no-move="no" data-gs-no-resize="no">
-                <div class="grid-stack-item-content">
-
-                    <div id="BinanceTOS">
-
-                    </div>
-                    <div class="loader"></div>
-                    <p>Connecting</p>
-                </div>
-            </div>
-            <div class="grid-stack-item" data-gs-x="4" data-gs-y="11" data-gs-width="2" data-gs-height="10" data-gs-no-move="no" data-gs-no-resize="no">
-                <div class="grid-stack-item-content">
-
-                    <div id="TOSETH">
-
-                    </div>
-                    <div class="loader"></div>
-                    <p>Connecting</p>
-                </div>
-            </div>
-            <div class="grid-stack-item" data-gs-x="0" data-gs-y="17" data-gs-width="2" data-gs-height="7" style="  border-radius: 5px;">
-                <div class="grid-stack-item-content" id="BTCUSDTDIV" style="  border-radius: 5px;">
-
-                    <table>
-                        <tr>
-                            <th colspan="2">BTCUSDT</th>
-                        </tr>
-
-                        <td>
-                            <div id="BTCUSDTBID" style="background-color: green; color: white;">
-                        </td>
-                        <td>
-                            <div id="BTCUSDTASK" style="background-color: red; color: white;">
-                        </td>
-                        <tr></tr>
-                        <td>
-                            <div id="BTCUSDTBIDSIZE" style="background-color: #232931; color: white">
-                        </td>
-                        <td>
-                            <div id="BTCUSDTASKSIZE" style="background-color: #232931; color: white">
-                        </td>
-                    </table>
-                    <!-- <center><canvas id="BTCUSDT"></canvas></center> -->
-                    <table id="BTCBOOK"></table>
-                    <div class="loader"></div>
-                    </div>
-                    </div>
-                    <div class="grid-stack-item" data-gs-x="2" data-gs-y="17" data-gs-width="2" data-gs-height="7" style="  border-radius: 5px;">
-                        <div class="grid-stack-item-content" id="ETHUSDTDIV" style="  border-radius: 5px;">
-
-                            <table>
-                                <tr>
-                                    <th colspan="2">ETHUSDT</th>
-                                </tr>
-
-                                <td>
-                                    <div id="ETHUSDTBID" style="background-color: green; color: white;">
-                                </td>
-                                <td>
-                                    <div id="ETHUSDTASK" style="background-color: red; color: white;">
-                                </td>
-                                <tr></tr>
-                                <td>
-                                    <div id="ETHUSDTBIDSIZE" style="background-color: #232931; color: white">
-                                </td>
-                                <td>
-                                    <div id="ETHUSDTASKSIZE" style="background-color: #232931; color: white">
-                                </td>
-                            </table>
-                            <!-- <center><canvas id="ETHUSDT"></canvas></center> -->
-                            <table id="ETHBOOK"></table>
-                            <div class="loader"></div>
-                            </div>
-                            </div>
-                            </div>
     </section>
 
     <div class="scroll-top">
@@ -987,17 +848,10 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/feather-icons/4.7.3/feather.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/slick-carousel/1.8.1/slick.min.js"></script>
     <script src="js/scripts.js"></script>
-    <script type="text/javascript" src="dist/bundle.js"></script>
-    <script type="text/javascript" src="dist/eth.js"></script>
-    <script type="text/javascript" src="dist/alphabook.js"></script>
-    <script type="text/javascript" src="dist/chart.js"></script>
-    <script type="text/javascript" src="dist/tickerBTC.js"></script>
-    <script type="text/javascript" src="dist/tickerETH.js"></script>
-    <script type="text/javascript" src="dist/depth.js"></script>
-    <script type="text/javascript" src="dist/longshort.js"></script>
     <!-- <script type="text/javascript" src="dist/futures.js"></script> -->
     <script type="text/javascript" src="dist/testbed.js"></script>
-    <!-- <script type="text/javascript" src="dist/yieldfinance.js"></script> -->
+    <script type="text/javascript" src="dist/traditional.js"></script>
+
 </body>
 
 </html>

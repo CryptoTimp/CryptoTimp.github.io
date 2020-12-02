@@ -532,11 +532,15 @@
         <ul class="nav-list">
             <li class="nav-item">
                 <i class="icon ri-stock-line "></i>
-                <span class="text"><a  href="webalpha.html">Futures<sup> Beta</sup></a></span>
+                <span class="text"><a href="webalpha.html">Futures<sup> Beta</sup></a></span>
             </li>
-            <li class="nav-item active">
+            <li class="nav-item">
                 <i class="icon ri-stock-line "></i>
-                <span class="text"><a  href="">Spot<sup> Soon</sup></a></span>
+                <span class="text"><a href="">Spot<sup> Soon</sup></a></span>
+            </li>
+            <li class="nav-item">
+                <i class="icon ri-stock-line "></i>
+                <span class="text"><a href="webalphadefi.html">Defi<sup> New!</sup></a></span>
             </li>
             <!-- <li class="nav-item">
                 <i class="icon ri-dashboard-line"></i>
@@ -558,27 +562,40 @@
                 <i class="icon ri-message-3-line"></i>
                 <span class="text">Messages</span>
             </li> -->
-            <li class="nav-item">
+            <li class="nav-item active">
                 <i class="icon ri-safe-line"></i>
-                <span class="text"><a  >Options</a></span>
+                <span class="text"><a href="">Options<sup> Soon</sup></a></span>
             </li>
+            <hr solid>
 
             <li class="nav-item">
-                <i class="icon ri-computer-line"></i>
-                <span class="text"><a  href="index.html#pricing">Desktop</a></span>
+                <i class="ri-download-2-line"></i>
+                <span class="text"><a href="index.html#pricing">Download</a></span>
             </li>
-            <li class="nav-item">
-                <i class="icon ri-search-line"></i>
-                <input type="text" id="search" placeholder="  live search" width="100px"></input>
-            </li>
-
-
         </ul>
         <div class="btn-toggle">
             <span class="text">Collapse</span>
             <i class="ri-arrow-left-line"></i>
         </div>
         <ul class="nav-list nav-bottom">
+            <li class="nav-item">
+                <i class="ri-zoom-in-line"></i>
+                <span class="text" onclick="zoom75()"><a>Zoom 75%</a></span>
+            </li>
+            <li class="nav-item">
+                <i class="ri-zoom-in-line"></i>
+                <span class="text" onclick="zoom100()"><a>Zoom 100%</a></span>
+            </li>
+            <script type="text/javascript">
+                function zoom75() {
+                    document.body.style.zoom = "75%"
+                }
+            </script>
+            <script type="text/javascript">
+                function zoom100() {
+                    document.body.style.zoom = "100%"
+                }
+            </script>
             <li class="nav-item">
                 <i class="icon ri-restart-line"></i>
                 <span class="text" id="reload">Reload</span>
@@ -590,10 +607,10 @@
                     }
                 </script>
             </li>
-            <li class="nav-item">
+            <!-- <li class="nav-item">
                 <i class="icon ri-settings-4-line"></i>
                 <span class="text">Settings</span>
-            </li>
+            </li> -->
             <li class="nav-item">
                 <i class="icon ri-shut-down-line"></i>
                 <span class="text"></span>
@@ -811,14 +828,29 @@
     <section class="py-7">
 
         <div class="grid-stack">
-            <div class="grid-stack-item" data-gs-x="0" data-gs-y="0" data-gs-width="10" data-gs-height="14" data-gs-no-move="no" data-gs-no-resize="no">
+            <div class="grid-stack-item" data-gs-x="0" data-gs-y="0" data-gs-width="2" data-gs-height="14" data-gs-no-move="no" data-gs-no-resize="no">
                 <div class="grid-stack-item-content">
-                    <div id="DeribitOptions"></div>
+                    <div id="GUI"></div>
                     <div class="loader"></div>
-                    <p>Calculating LINKUSDT</p>
+
+                </div>
+            </div>
+
+            <div class="grid-stack-item" data-gs-x="2" data-gs-y="0" data-gs-width="2" data-gs-height="14" data-gs-no-move="no" data-gs-no-resize="no">
+                <div class="grid-stack-item-content">
+                    <div id="GUIETH"></div>
+                    <div class="loader"></div>
+
+                </div>
+            </div>
+
+            <div class="grid-stack-item" data-gs-x="4" data-gs-y="0" data-gs-width="3" data-gs-height="14" data-gs-no-move="no" data-gs-no-resize="no">
+                <div class="grid-stack-item-content">
+                    <div id="TABLE"></div>
                 </div>
             </div>
         </div>
+
 
     </section>
 
@@ -835,7 +867,9 @@
     <script src="js/scripts.js"></script>
     <!-- <script type="text/javascript" src="dist/futures.js"></script> -->
     <script type="text/javascript" src="dist/testbed.js"></script>
+    <script type="text/javascript" src="dist/optionstable.js"></script>
     <script type="text/javascript" src="dist/options.js"></script>
+    <script type="text/javascript" src="dist/optionsETH.js"></script>
 </body>
 
 </html>
