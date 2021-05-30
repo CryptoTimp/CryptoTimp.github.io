@@ -23,7 +23,7 @@
     "q": "^1.5.1",
     "simple-rest": "^1.5.3",
     "websocket": "^1.0.32",
-    "ws": "^7.4.0"
+    "ws": "^7.4.6"
   },
   "devDependencies": {},
   "scripts": {
